@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Trainingsplan erstellen</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  </head>
+  <body>
+    <div class="container mt-4">
+      <h2>Trainingsplan erstellen</h2>
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.title.label }} {{ form.title(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.description.label }} {{ form.description(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.submit(class="btn btn-primary btn-block") }}
+        </div>
+      </form>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+    </div>
+  </body>
+</html>

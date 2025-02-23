@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Details für {{ exercise.name }}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      #chartContainer { margin: auto; height: 250px; }
+      @media (min-width: 768px) { #chartContainer { height: 400px; } }
+    </style>
+  </head>
+  <body>
+    <div class="container mt-4">
+      <h2 class="text-center">Verlauf für "{{ exercise.name }}"</h2>
+      {% if exercise.description %}
+        <p class="text-center text-muted">{{ exercise.description }}</p>
+      {% endif %}  
+      <div id="chartContainer" class="mb-4">
+        <canvas id="progressChart"></canvas>
+      </div>
+      <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block mb-4">Neuen Satz hinzufügen</a>
+      <h3>Letzte 15 Sätze</h3>
+      <ul class="list-group">
+        {% for session in sessions %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</span>
+            <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');">
+              <button type="submit" class="btn btn-danger btn-sm">×</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+      <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
+        <button type="submit" class="btn btn-danger btn-block">Übung löschen</button>
+      </form>
+      <a href="{{ url_for('training_plan_detail', training_plan_id=exercise.training_plan_id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
+    </div>
+    <script>
+      const allSessions = {{ all_sessions|tojson }};
+      const labels = allSessions.map(s => s.timestamp);
+      const weights = allSessions.map(s => s.weight);
+      const repetitions = allSessions.map(s => s.repetitions);
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      const progressChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Gewicht (kg)',
+              data: weights,
+              borderColor: 'rgba(75, 192, 192, 1)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              fill: false,
+              tension: 0.1
+            },
+            {
+              label: 'Wiederholungen',
+              data: repetitions,
+              borderColor: 'rgba(153, 102, 255, 1)',
+              backgroundColor: 'rgba(153, 102, 255, 0.2)',
+              fill: false,
+              tension: 0.1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: 'Datum und Uhrzeit' }
+            },
+            y: {
+              title: { display: true, text: 'Wert' },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

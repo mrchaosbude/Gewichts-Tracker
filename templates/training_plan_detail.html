@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{{ training_plan.title }}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+      .session-list { font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container mt-4">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2>{{ training_plan.title }}</h2>
+        <form action="{{ url_for('delete_training_plan', training_plan_id=training_plan.id) }}" method="POST" onsubmit="return confirm('Trainingsplan wirklich löschen?');">
+          <button type="submit" class="btn btn-danger btn-sm">Löschen</button>
+        </form>
+      </div>
+      <p>{{ training_plan.description }}</p>
+      <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success mb-3 btn-block">Übung hinzufügen</a>
+      <h3>Übungen</h3>
+      <ul class="list-group">
+        {% for exercise in training_plan.exercises %}
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>{{ exercise.name }}</strong>
+                {% if exercise.description %}
+                  <p class="mb-0 small text-muted">{{ exercise.description }}</p>
+                {% endif %}
+              </div>
+              <div>
+                <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-info btn-sm">Details</a>
+              </div>
+            </div>
+            <div class="session-list mt-2">
+              {% set sessions_sorted = exercise.sessions|sort(attribute='timestamp', reverse=True) %}
+              {% for session in sessions_sorted[:3] %}
+                <div>
+                  {{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen
+                </div>
+              {% endfor %}
+            </div>
+          </li>        
+        {% endfor %}
+      </ul>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück</a>
+    </div>
+  </body>
+</html>

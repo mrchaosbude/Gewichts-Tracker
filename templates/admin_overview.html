@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Admin – Benutzerübersicht</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  </head>
+  <body>
+    <div class="container mt-4">
+      <h2>Admin – Benutzerübersicht</h2>
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Benutzername</th>
+            <th>Registriert am</th>
+            <th>Letzter Login</th>
+            <th>Trainer</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td>{{ user.username }}</td>
+              <td>{{ user.registration_date.strftime('%d.%m.%Y %H:%M') }}</td>
+              <td>
+                {% if user.last_login %}
+                  {{ user.last_login.strftime('%d.%m.%Y %H:%M') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>{{ 'Ja' if user.is_trainer else 'Nein' }}</td>
+              <td>
+                {% if not user.is_trainer %}
+                <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-secondary btn-sm">Trainer setzen</button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-secondary btn-sm">Trainer entfernen</button>
+                </form>
+                {% endif %}
+                <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-primary btn-sm">Passwort ändern</a>
+                {% if user.id != current_user.id %}
+                  <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
+                    <button type="submit" class="btn btn-danger btn-sm">Löschen</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+    </div>
+  </body>
+</html>
