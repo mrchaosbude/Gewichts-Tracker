@@ -35,5 +35,5 @@ Dies ist ein **komplettes** Flask‑Projekt zum Verwalten von Trainingsplänen, 
 
 ## License
 
-This project is licensed under the [NAME HERE] License
-Der Autor mrchaos PolyForm Noncommercial behält sich das Recht vor, dieses Werk für kommerzielle Zwecke zu nutzen oder Lizenzen für kommerzielle Nutzungen zu vergeben.
+This project is licensed under the PolyForm Noncommercial License
+Der Autor mrchaos behält sich das Recht vor, dieses Werk für kommerzielle Zwecke zu nutzen oder Lizenzen für kommerzielle Nutzungen zu vergeben.
