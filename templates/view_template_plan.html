@@ -13,7 +13,12 @@
       <h4>Enthaltene Übungen</h4>
       <ul class="list-group mb-4">
         {% for exercise in template_plan.exercises %}
-          <li class="list-group-item">{{ exercise.name }}</li>
+          <li class="list-group-item">
+            <strong>{{ exercise.name }}</strong>
+            {% if exercise.description %}
+              <p class="mb-0 small text-muted">{{ exercise.description }}</p>
+            {% endif %}
+          </li>
         {% else %}
           <li class="list-group-item">Keine Übungen vorhanden.</li>
         {% endfor %}

@@ -14,7 +14,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fitness.db'
 # reCAPTCHA-Konfiguration (ersetze die Schlüssel durch deine echten Werte)
 app.config['RECAPTCHA_PUBLIC_KEY'] = 'dein_recaptcha_public_key'
 app.config['RECAPTCHA_PRIVATE_KEY'] = 'dein_recaptcha_private_key'
-# Zum Testen kannst du diese Variable auf False setzen:
+# Zum Testen (ohne reCAPTCHA) kannst du es hier auf False setzen:
 app.config['RECAPTCHA_ENABLED'] = False
 
 db = SQLAlchemy(app)
@@ -24,9 +24,10 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# -------------------------
+# ----------------------------------------------------
 # Datenbankmodelle
-# -------------------------
+# ----------------------------------------------------
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
@@ -34,7 +35,7 @@ class User(UserMixin, db.Model):
     registration_date = db.Column(db.DateTime, default=datetime.datetime.now)
     last_login = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
-    is_trainer = db.Column(db.Boolean, default=False)  # Neue Rolle: Trainer
+    is_trainer = db.Column(db.Boolean, default=False)
     training_plans = db.relationship('TrainingPlan', backref='owner', lazy=True, cascade="all, delete-orphan")
 
 class TrainingPlan(db.Model):
@@ -47,7 +48,7 @@ class TrainingPlan(db.Model):
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
-    description = db.Column(db.String(300), nullable=True)  # Neues Feld für Beschreibung
+    description = db.Column(db.String(300), nullable=True)  # Beschreibung der Übung
     training_plan_id = db.Column(db.Integer, db.ForeignKey('training_plan.id'), nullable=False)
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
 
@@ -55,30 +56,31 @@ class ExerciseSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     repetitions = db.Column(db.Integer, nullable=False)
-    weight = db.Column(db.Integer, nullable=False)  # Als Integer
+    weight = db.Column(db.Integer, nullable=False)  # Gewicht als Integer
     timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
 
-# Neue Modelle für Template Trainingspläne
+# Modelle für Template Trainingspläne
 class TemplateTrainingPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300))
-    creator_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Admin/Trainer, der die Vorlage erstellt hat
-    is_visible = db.Column(db.Boolean, default=True)  # Neues Feld für Sichtbarkeit
+    creator_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Admin/Trainer, der die Vorlage erstellt
+    is_visible = db.Column(db.Boolean, default=True)  # Sichtbarkeit
     exercises = db.relationship('TemplateExercise', backref='template_plan', lazy=True, cascade="all, delete-orphan")
 
 class TemplateExercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.String(300), nullable=True)  # Beschreibung bei Template-Übung
     template_plan_id = db.Column(db.Integer, db.ForeignKey('template_training_plan.id'), nullable=False)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# -------------------------
+# ----------------------------------------------------
 # Decorators
-# -------------------------
+# ----------------------------------------------------
 def admin_required(f):
     from functools import wraps
     @wraps(f)
@@ -97,9 +99,9 @@ def trainer_or_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# -------------------------
+# ----------------------------------------------------
 # Formulare
-# -------------------------
+# ----------------------------------------------------
 class RegistrationForm(FlaskForm):
     username = StringField('Benutzername', validators=[DataRequired(), Length(min=4, max=25)])
     password = PasswordField('Passwort', validators=[DataRequired(), Length(min=6)])
@@ -125,7 +127,7 @@ class TrainingPlanForm(FlaskForm):
 
 class ExerciseTemplateForm(FlaskForm):
     name = StringField('Übungsname', validators=[DataRequired()])
-    description = StringField('Beschreibung')  # Optionales Beschreibungsfeld
+    description = StringField('Beschreibung (optional)')  # Beschreibung bei normaler Übung
     submit = SubmitField('Übung hinzufügen')
 
 class ExerciseSessionForm(FlaskForm):
@@ -138,19 +140,21 @@ class AdminChangePasswordForm(FlaskForm):
     confirm = PasswordField('Passwort wiederholen', validators=[DataRequired(), EqualTo('new_password', message='Passwörter müssen übereinstimmen')])
     submit = SubmitField('Passwort ändern')
 
-# Formulare für Template Trainingspläne
+# Formular für Template Trainingspläne
 class TemplateTrainingPlanForm(FlaskForm):
     title = StringField('Titel', validators=[DataRequired()])
     description = StringField('Beschreibung')
-    submit = SubmitField('Vorlage erstellen')
+    submit = SubmitField('Vorlage speichern')
 
+# Formular für Template-Übungen (Übungsname + Beschreibung)
 class TemplateExerciseForm(FlaskForm):
     name = StringField('Übungsname', validators=[DataRequired()])
+    description = StringField('Beschreibung (optional)')
     submit = SubmitField('Übung hinzufügen')
 
-# -------------------------
+# ----------------------------------------------------
 # Routen
-# -------------------------
+# ----------------------------------------------------
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -234,7 +238,7 @@ def add_exercise_to_plan(training_plan_id):
     if form.validate_on_submit():
         new_exercise = Exercise(
             name=form.name.data,
-            description=form.description.data,  # Beschreibung übernehmen
+            description=form.description.data,
             training_plan_id=training_plan_id
         )
         db.session.add(new_exercise)
@@ -242,7 +246,6 @@ def add_exercise_to_plan(training_plan_id):
         flash('Übung hinzugefügt!', 'success')
         return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
     return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan)
-
 
 @app.route('/exercise/<int:exercise_id>/add_session', methods=['GET','POST'])
 @login_required
@@ -277,6 +280,7 @@ def exercise_detail(exercise_id):
         abort(403)
     all_sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).limit(15).all()
+
     def serialize_session(s):
         return {
             'id': s.id,
@@ -322,15 +326,9 @@ def delete_session(session_id):
     flash('Satz gelöscht!', 'info')
     return redirect(url_for('exercise_detail', exercise_id=exercise_id))
 
-@app.route('/template_plan/<int:template_plan_id>/view')
-@login_required
-def view_template_plan(template_plan_id):
-    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    return render_template('view_template_plan.html', template_plan=template_plan)
-
-# -------------------------
+# ----------------------------------------------------
 # Synchronisations-API (für Offline-Daten)
-# -------------------------
+# ----------------------------------------------------
 @app.route('/sync', methods=['POST'])
 @login_required
 def sync():
@@ -351,9 +349,9 @@ def sync():
     db.session.commit()
     return jsonify({'status': 'success'}), 200
 
-# -------------------------
+# ----------------------------------------------------
 # Admin-Funktionalitäten
-# -------------------------
+# ----------------------------------------------------
 @app.route('/admin')
 @login_required
 @admin_required
@@ -387,94 +385,7 @@ def admin_delete_user(user_id):
     flash(f'Benutzer {user.username} gelöscht!', 'info')
     return redirect(url_for('admin_overview'))
 
-# Neue Admin-/Trainer-Funktionalitäten für Vorlagen
-@app.route('/admin/template_plans')
-@login_required
-@trainer_or_admin_required
-def admin_template_plans():
-    templates = TemplateTrainingPlan.query.all()
-    return render_template('admin_template_plans.html', templates=templates)
-
-@app.route('/admin/template_plan/create', methods=['GET', 'POST'])
-@login_required
-@trainer_or_admin_required
-def create_template_plan():
-    form = TemplateTrainingPlanForm()
-    if form.validate_on_submit():
-        new_template = TemplateTrainingPlan(
-            title=form.title.data,
-            description=form.description.data,
-            creator_id=current_user.id
-        )
-        db.session.add(new_template)
-        db.session.commit()
-        flash('Template Trainingsplan erstellt!', 'success')
-        return redirect(url_for('admin_template_plans'))
-    return render_template('create_template_plan.html', form=form)
-
-@app.route('/admin/template_plan/<int:template_plan_id>/edit', methods=['GET', 'POST'])
-@login_required
-@trainer_or_admin_required
-def edit_template_plan(template_plan_id):
-    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    form = TemplateTrainingPlanForm(obj=template_plan)
-    if form.validate_on_submit():
-        template_plan.title = form.title.data
-        template_plan.description = form.description.data
-        db.session.commit()
-        flash('Template Trainingsplan aktualisiert!', 'success')
-        return redirect(url_for('admin_template_plans'))
-    return render_template('edit_template_plan.html', form=form, template_plan=template_plan)
-
-@app.route('/admin/template_plan/<int:template_plan_id>/add_exercise', methods=['GET', 'POST'])
-@login_required
-@trainer_or_admin_required
-def add_exercise_to_template(template_plan_id):
-    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    form = TemplateExerciseForm()
-    if form.validate_on_submit():
-        new_exercise = TemplateExercise(
-            name=form.name.data,
-            template_plan_id=template_plan_id
-        )
-        db.session.add(new_exercise)
-        db.session.commit()
-        flash('Übung zur Vorlage hinzugefügt!', 'success')
-        return redirect(url_for('admin_template_plans'))
-    return render_template('add_exercise_to_template.html', form=form, template_plan=template_plan)
-
-# Route für alle Benutzer, um verfügbare Vorlagen anzuzeigen
-@app.route('/template_plans')
-@login_required
-def template_plans():
-    if current_user.is_admin or current_user.is_trainer:
-        templates = TemplateTrainingPlan.query.all()
-    else:
-        templates = TemplateTrainingPlan.query.filter_by(is_visible=True).all()
-    return render_template('template_plans.html', templates=templates)
-
-# Route, um eine Vorlage zu übernehmen (kopieren) und dem eigenen Konto hinzuzufügen
-@app.route('/template_plan/<int:template_plan_id>/add_to_account', methods=['POST'])
-@login_required
-def add_template_to_account(template_plan_id):
-    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    new_plan = TrainingPlan(
-         title = template_plan.title,
-         description = template_plan.description,
-         user_id = current_user.id
-    )
-    db.session.add(new_plan)
-    db.session.flush()  # Neue ID generieren
-    for temp_ex in template_plan.exercises:
-         new_ex = Exercise(
-              name = temp_ex.name,
-              training_plan_id = new_plan.id
-         )
-         db.session.add(new_ex)
-    db.session.commit()
-    flash('Template Trainingsplan wurde zu deinem Konto hinzugefügt!', 'success')
-    return redirect(url_for('dashboard'))
-
+# Rolle: Trainer setzen/entfernen
 @app.route('/admin/user/<int:user_id>/set_trainer', methods=['POST'])
 @login_required
 @admin_required
@@ -501,15 +412,65 @@ def admin_remove_trainer(user_id):
     flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
     return redirect(url_for('admin_overview'))
 
-@app.route('/admin/template_plan/<int:template_plan_id>/delete', methods=['POST'])
+# ----------------------------------------------------
+# Admin-/Trainer-Funktionalitäten für Template-Pläne
+# ----------------------------------------------------
+@app.route('/admin/template_plans')
 @login_required
 @trainer_or_admin_required
-def delete_template_plan(template_plan_id):
+def admin_template_plans():
+    templates = TemplateTrainingPlan.query.all()
+    return render_template('admin_template_plans.html', templates=templates)
+
+@app.route('/admin/template_plan/create', methods=['GET', 'POST'])
+@login_required
+@trainer_or_admin_required
+def create_template_plan():
+    form = TemplateTrainingPlanForm()
+    if form.validate_on_submit():
+        new_template = TemplateTrainingPlan(
+            title=form.title.data,
+            description=form.description.data,
+            creator_id=current_user.id,
+            is_visible=True
+        )
+        db.session.add(new_template)
+        db.session.commit()
+        flash('Template Trainingsplan erstellt!', 'success')
+        return redirect(url_for('admin_template_plans'))
+    return render_template('create_template_plan.html', form=form)
+
+@app.route('/admin/template_plan/<int:template_plan_id>/edit', methods=['GET','POST'])
+@login_required
+@trainer_or_admin_required
+def edit_template_plan(template_plan_id):
     template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    db.session.delete(template_plan)
-    db.session.commit()
-    flash("Template Trainingsplan gelöscht!", "info")
-    return redirect(url_for('admin_template_plans'))
+    form = TemplateTrainingPlanForm(obj=template_plan)
+    if form.validate_on_submit():
+        template_plan.title = form.title.data
+        template_plan.description = form.description.data
+        db.session.commit()
+        flash('Template Trainingsplan aktualisiert!', 'success')
+        return redirect(url_for('admin_template_plans'))
+    return render_template('edit_template_plan.html', form=form, template_plan=template_plan)
+
+@app.route('/admin/template_plan/<int:template_plan_id>/add_exercise', methods=['GET','POST'])
+@login_required
+@trainer_or_admin_required
+def add_exercise_to_template(template_plan_id):
+    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
+    form = TemplateExerciseForm()
+    if form.validate_on_submit():
+        new_exercise = TemplateExercise(
+            name=form.name.data,
+            description=form.description.data,  # Beschreibung der Template-Übung
+            template_plan_id=template_plan_id
+        )
+        db.session.add(new_exercise)
+        db.session.commit()
+        flash('Übung zur Vorlage hinzugefügt!', 'success')
+        return redirect(url_for('admin_template_plans'))
+    return render_template('add_exercise_to_template.html', form=form, template_plan=template_plan)
 
 @app.route('/admin/template_plan/<int:template_plan_id>/toggle_visibility', methods=['POST'])
 @login_required
@@ -521,9 +482,70 @@ def toggle_template_visibility(template_plan_id):
     status = "sichtbar" if template_plan.is_visible else "unsichtbar"
     flash(f"Template Trainingsplan ist jetzt {status}.", "success")
     return redirect(url_for('admin_template_plans'))
-# -------------------------
+
+@app.route('/admin/template_plan/<int:template_plan_id>/delete', methods=['POST'])
+@login_required
+@trainer_or_admin_required
+def delete_template_plan(template_plan_id):
+    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
+    db.session.delete(template_plan)
+    db.session.commit()
+    flash("Template Trainingsplan gelöscht!", "info")
+    return redirect(url_for('admin_template_plans'))
+
+# ----------------------------------------------------
+# Benutzeransicht für Vorlagen
+# ----------------------------------------------------
+@app.route('/template_plans')
+@login_required
+def template_plans():
+    if current_user.is_admin or current_user.is_trainer:
+        templates = TemplateTrainingPlan.query.all()
+    else:
+        templates = TemplateTrainingPlan.query.filter_by(is_visible=True).all()
+    return render_template('template_plans.html', templates=templates)
+
+@app.route('/template_plan/<int:template_plan_id>/view')
+@login_required
+def view_template_plan(template_plan_id):
+    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
+    # Falls der Plan unsichtbar ist und der aktuelle User kein Admin/Trainer, 403
+    if not template_plan.is_visible and not (current_user.is_admin or current_user.is_trainer):
+        abort(403)
+    return render_template('view_template_plan.html', template_plan=template_plan)
+
+@app.route('/template_plan/<int:template_plan_id>/add_to_account', methods=['POST'])
+@login_required
+def add_template_to_account(template_plan_id):
+    template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
+    # Falls der Plan unsichtbar ist und der aktuelle User kein Admin/Trainer, 403
+    if not template_plan.is_visible and not (current_user.is_admin or current_user.is_trainer):
+        abort(403)
+
+    new_plan = TrainingPlan(
+        title=template_plan.title,
+        description=template_plan.description,
+        user_id=current_user.id
+    )
+    db.session.add(new_plan)
+    db.session.flush()  # Neue ID generieren
+
+    for temp_ex in template_plan.exercises:
+        # Hier nun die Beschreibung von temp_ex.description übernehmen:
+        new_ex = Exercise(
+            name=temp_ex.name,
+            description=temp_ex.description,  # Beschreibung übernehmen
+            training_plan_id=new_plan.id
+        )
+        db.session.add(new_ex)
+    
+    db.session.commit()
+    flash('Template Trainingsplan wurde zu deinem Konto hinzugefügt!', 'success')
+    return redirect(url_for('dashboard'))
+
+# ----------------------------------------------------
 # Anwendung starten
-# -------------------------
+# ----------------------------------------------------
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Tabellen erstellen (nur beim ersten Start)

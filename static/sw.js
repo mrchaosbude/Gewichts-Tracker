@@ -4,7 +4,6 @@ const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/css/bootstrap.min.css',
   '/static/js/main.js'
-  // Weitere statische Dateien hier hinzufügen
 ];
 
 self.addEventListener('install', event => {

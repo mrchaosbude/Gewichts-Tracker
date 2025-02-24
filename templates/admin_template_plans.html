@@ -9,13 +9,15 @@
   <body>
     <div class="container mt-4">
       <h2>Admin – Template Trainingspläne</h2>
-      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success mb-3 btn-block">Neuen Template Trainingsplan erstellen</a>
+      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success mb-3 btn-block">
+        Neuen Template Trainingsplan erstellen
+      </a>
       <table class="table table-striped">
         <thead>
           <tr>
             <th>Titel</th>
             <th>Beschreibung</th>
-            <th>Sichtbarkeit</th>
+            <th>Sichtbar</th>
             <th>Aktionen</th>
           </tr>
         </thead>
@@ -24,7 +26,7 @@
           <tr>
             <td>{{ tpl.title }}</td>
             <td>{{ tpl.description }}</td>
-            <td>{{ 'Sichtbar' if tpl.is_visible else 'Unsichtbar' }}</td>
+            <td>{{ 'Ja' if tpl.is_visible else 'Nein' }}</td>
             <td>
               <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-primary btn-sm">Übung hinzufügen</a>
               <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
