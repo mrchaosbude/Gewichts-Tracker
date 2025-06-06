@@ -28,10 +28,23 @@ Dies ist ein **komplettes** Flask‑Projekt zum Verwalten von Trainingsplänen, 
    - Service Worker (sw.js) und Manifest (manifest.json) ermöglichen das Caching statischer Ressourcen  
    - Offline erstellte Daten (Sessions) können lokal gespeichert und bei Online‑Wiederkehr synchronisiert werden
 
-5. **Rollen**  
+5. **Rollen**
    - **Admin**: uneingeschränkte Rechte (Benutzerverwaltung, Trainer‑Rang setzen/entziehen, Templates erstellen, Sichtbarkeit umschalten …)  
    - **Trainer**: ähnliche Rechte wie Admin für Templates (Erstellen, Editieren, Löschen, Sichtbarkeit …)  
    - **Standardbenutzer**: kann eigene Pläne verwalten und Vorlagen übernehmen, sieht jedoch nur sichtbare Vorlagen
+
+## Datenbank-Migration auf globale Übungen
+
+Mit dem Skript `migrate_to_global_exercises.py` kannst du eine bestehende
+`fitness.db` aktualisieren, um die neuen globalen Übungen und die
+Zwischentabelle `plan_exercises` zu verwenden. Führe dazu einfach
+
+```bash
+python migrate_to_global_exercises.py
+```
+
+aus. Falls die Datenbank bereits angepasst wurde, beendet sich das Skript
+ohne weitere Änderungen.
 
 ## License
 
