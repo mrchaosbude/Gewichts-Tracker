@@ -36,7 +36,7 @@
       <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
         <button type="submit" class="btn btn-danger btn-block">Übung löschen</button>
       </form>
-      <a href="{{ url_for('training_plan_detail', training_plan_id=exercise.training_plan_id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
+      <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
     </div>
     <script>
       const allSessions = {{ all_sessions|tojson }};

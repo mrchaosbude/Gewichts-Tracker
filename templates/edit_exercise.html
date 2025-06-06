@@ -21,7 +21,7 @@
           {{ form.submit(class="btn btn-primary btn-block", value="Speichern") }}
         </div>
       </form>
-      <a href="{{ url_for('training_plan_detail', training_plan_id=exercise.training_plan_id) }}" class="btn btn-secondary btn-block">Zurück</a>
+      <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block">Zurück</a>
     </div>
   </body>
 </html>
