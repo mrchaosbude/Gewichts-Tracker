@@ -23,5 +23,21 @@
       </form>
       <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-secondary btn-block">Zurück</a>
     </div>
+    <script src="/static/js/main.js"></script>
+    <script>
+      document.querySelector('form').addEventListener('submit', function(e) {
+        if (!navigator.onLine) {
+          e.preventDefault();
+          saveOfflineSession({
+            exercise_id: {{ exercise.id }},
+            repetitions: document.getElementById('repetitions').value,
+            weight: document.getElementById('weight').value,
+            timestamp: new Date().toISOString()
+          });
+          alert('Offline: Session wird gespeichert und beim n\u00e4chsten Online-Sein synchronisiert.');
+          window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+        }
+      });
+    </script>
   </body>
 </html>
