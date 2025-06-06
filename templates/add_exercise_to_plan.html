@@ -12,6 +12,15 @@
       <form method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group">
+          <label for="existing_exercise">Vorhandene Übung verwenden</label>
+          <select name="existing_exercise_id" class="form-control">
+            <option value="">-- Neue Übung erstellen --</option>
+            {% for ex in existing_exercises %}
+              <option value="{{ ex.id }}">{{ ex.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
           {{ form.name.label }} {{ form.name(class="form-control") }}
         </div>
         <div class="form-group">

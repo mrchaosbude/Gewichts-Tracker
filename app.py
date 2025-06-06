@@ -38,19 +38,26 @@ class User(UserMixin, db.Model):
     is_trainer = db.Column(db.Boolean, default=False)
     training_plans = db.relationship('TrainingPlan', backref='owner', lazy=True, cascade="all, delete-orphan")
 
+plan_exercises = db.Table(
+    'plan_exercises',
+    db.Column('training_plan_id', db.Integer, db.ForeignKey('training_plan.id'), primary_key=True),
+    db.Column('exercise_id', db.Integer, db.ForeignKey('exercise.id'), primary_key=True)
+)
+
+
 class TrainingPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    exercises = db.relationship('Exercise', backref='training_plan', lazy=True, cascade="all, delete-orphan")
+    exercises = db.relationship('Exercise', secondary=plan_exercises, back_populates='training_plans')
 
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300), nullable=True)  # Beschreibung der Übung
-    training_plan_id = db.Column(db.Integer, db.ForeignKey('training_plan.id'), nullable=False)
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
+    training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
 
 class ExerciseSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -235,23 +242,27 @@ def add_exercise_to_plan(training_plan_id):
     if training_plan.user_id != current_user.id:
         abort(403)
     form = ExerciseTemplateForm()
+    existing_exercises = Exercise.query.order_by(Exercise.name).all()
     if form.validate_on_submit():
-        new_exercise = Exercise(
-            name=form.name.data,
-            description=form.description.data,
-            training_plan_id=training_plan_id
-        )
-        db.session.add(new_exercise)
+        selected_id = request.form.get('existing_exercise_id')
+        if selected_id:
+            exercise = Exercise.query.get(int(selected_id))
+        else:
+            exercise = Exercise(name=form.name.data, description=form.description.data)
+            db.session.add(exercise)
+            db.session.flush()
+        if exercise not in training_plan.exercises:
+            training_plan.exercises.append(exercise)
         db.session.commit()
         flash('Übung hinzugefügt!', 'success')
         return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
-    return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan)
+    return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan, existing_exercises=existing_exercises)
 
 @app.route('/exercise/<int:exercise_id>/add_session', methods=['GET','POST'])
 @login_required
 def add_session(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    if exercise.training_plan.user_id != current_user.id:
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     form = ExerciseSessionForm()
     if request.method == 'GET':
@@ -276,8 +287,9 @@ def add_session(exercise_id):
 @login_required
 def exercise_detail(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    if exercise.training_plan.user_id != current_user.id:
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
+    user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
     all_sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
@@ -289,22 +301,23 @@ def exercise_detail(exercise_id):
             'repetitions': s.repetitions
         }
     all_sessions_serialized = [serialize_session(s) for s in all_sessions]
-    return render_template('exercise_detail.html', exercise=exercise, all_sessions=all_sessions_serialized, sessions=sessions)
+    return render_template('exercise_detail.html', exercise=exercise, all_sessions=all_sessions_serialized, sessions=sessions, user_plan=user_plan)
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_exercise(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    if exercise.training_plan.user_id != current_user.id:
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
+    user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
     form = ExerciseTemplateForm(obj=exercise)
     if form.validate_on_submit():
         exercise.name = form.name.data
         exercise.description = form.description.data
         db.session.commit()
         flash('Übung aktualisiert!', 'success')
-        return redirect(url_for('training_plan_detail', training_plan_id=exercise.training_plan_id))
-    return render_template('edit_exercise.html', form=form, exercise=exercise)
+        return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
+    return render_template('edit_exercise.html', form=form, exercise=exercise, user_plan=user_plan)
 
 @app.route('/training_plan/<int:training_plan_id>/delete', methods=['POST'])
 @login_required
@@ -321,19 +334,21 @@ def delete_training_plan(training_plan_id):
 @login_required
 def delete_exercise(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-    if exercise.training_plan.user_id != current_user.id:
+    user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
+    if not user_plan:
         abort(403)
-    training_plan_id = exercise.training_plan_id
-    db.session.delete(exercise)
+    user_plan.exercises.remove(exercise)
+    if not exercise.training_plans:
+        db.session.delete(exercise)
     db.session.commit()
     flash('Übung gelöscht!', 'info')
-    return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
+    return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
 
 @app.route('/session/<int:session_id>/delete', methods=['POST'])
 @login_required
 def delete_session(session_id):
     session = ExerciseSession.query.get_or_404(session_id)
-    if session.exercise.training_plan.user_id != current_user.id:
+    if not any(p.user_id == current_user.id for p in session.exercise.training_plans):
         abort(403)
     exercise_id = session.exercise_id
     db.session.delete(session)
@@ -546,14 +561,13 @@ def add_template_to_account(template_plan_id):
     db.session.flush()  # Neue ID generieren
 
     for temp_ex in template_plan.exercises:
-        # Hier nun die Beschreibung von temp_ex.description übernehmen:
-        new_ex = Exercise(
-            name=temp_ex.name,
-            description=temp_ex.description,  # Beschreibung übernehmen
-            training_plan_id=new_plan.id
-        )
-        db.session.add(new_ex)
-    
+        exercise = Exercise.query.filter_by(name=temp_ex.name, description=temp_ex.description).first()
+        if not exercise:
+            exercise = Exercise(name=temp_ex.name, description=temp_ex.description)
+            db.session.add(exercise)
+            db.session.flush()
+        new_plan.exercises.append(exercise)
+
     db.session.commit()
     flash('Template Trainingsplan wurde zu deinem Konto hinzugefügt!', 'success')
     return redirect(url_for('dashboard'))
