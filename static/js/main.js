@@ -23,4 +23,3 @@ function saveOfflineSession(sessionData) {
       .catch(err => console.error('Sync failed', err));
     }
   });
-  

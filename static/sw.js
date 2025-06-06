@@ -1,9 +1,10 @@
-const CACHE_NAME = 'fitness-app-cache-v1';
+const CACHE_NAME = 'fitness-app-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/manifest.json',
   '/static/css/bootstrap.min.css',
-  '/static/js/main.js'
+  '/static/js/main.js',
+  '/static/offline.html'
 ];
 
 self.addEventListener('install', event => {
@@ -15,11 +16,31 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      return cachedResponse || fetch(event.request);
-    })
-  );
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      Promise.race([
+        fetch(event.request)
+          .then(response => {
+            const respClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, respClone));
+            return response;
+          })
+          .catch(() => caches.match(event.request)),
+        new Promise(resolve =>
+          setTimeout(() => resolve(caches.match(event.request)), 3000)
+        )
+      ]).then(resp => resp || caches.match('/static/offline.html'))
+    );
+  } else {
+    event.respondWith(
+      caches.match(event.request).then(cachedResponse => {
+        return (
+          cachedResponse ||
+          fetch(event.request).catch(() => caches.match('/static/offline.html'))
+        );
+      })
+    );
+  }
 });
 
 self.addEventListener('activate', event => {
