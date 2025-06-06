@@ -291,6 +291,21 @@ def exercise_detail(exercise_id):
     all_sessions_serialized = [serialize_session(s) for s in all_sessions]
     return render_template('exercise_detail.html', exercise=exercise, all_sessions=all_sessions_serialized, sessions=sessions)
 
+@app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_exercise(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    if exercise.training_plan.user_id != current_user.id:
+        abort(403)
+    form = ExerciseTemplateForm(obj=exercise)
+    if form.validate_on_submit():
+        exercise.name = form.name.data
+        exercise.description = form.description.data
+        db.session.commit()
+        flash('Übung aktualisiert!', 'success')
+        return redirect(url_for('training_plan_detail', training_plan_id=exercise.training_plan_id))
+    return render_template('edit_exercise.html', form=form, exercise=exercise)
+
 @app.route('/training_plan/<int:training_plan_id>/delete', methods=['POST'])
 @login_required
 def delete_training_plan(training_plan_id):
