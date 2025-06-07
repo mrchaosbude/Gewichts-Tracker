@@ -21,7 +21,6 @@
         <canvas id="progressChart"></canvas>
       </div>
       <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block mb-2">Neuen Satz hinzufügen</a>
-      <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
       <h3>Letzte 15 Sätze</h3>
       <ul class="list-group">
         {% for session in sessions %}
@@ -34,6 +33,7 @@
         {% endfor %}
       </ul>
       <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
+        <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
         <button type="submit" class="btn btn-danger btn-block">Übung löschen</button>
       </form>
       <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
