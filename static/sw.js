@@ -2,7 +2,6 @@ const CACHE_NAME = 'fitness-app-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/manifest.json',
-  '/static/css/bootstrap.min.css',
   '/static/js/main.js',
   '/static/offline.html'
 ];
