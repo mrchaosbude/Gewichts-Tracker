@@ -1,8 +1,9 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, abort, jsonify
+import markdown
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField
+from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
@@ -80,6 +81,12 @@ class TemplateExercise(db.Model):
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300), nullable=True)  # Beschreibung bei Template-Übung
     template_plan_id = db.Column(db.Integer, db.ForeignKey('template_training_plan.id'), nullable=False)
+
+# Seiten, die im Login-Footer verlinkt werden
+class FooterPage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    content = db.Column(db.Text, nullable=False)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -189,6 +196,14 @@ class ToggleTemplateVisibilityForm(FlaskForm):
 class DeleteTemplatePlanForm(FlaskForm):
     submit = SubmitField('Löschen')
 
+class FooterPageForm(FlaskForm):
+    title = StringField('Seitentitel', validators=[DataRequired()])
+    content = TextAreaField('Inhalt (Markdown)', validators=[DataRequired()])
+    submit = SubmitField('Speichern')
+
+class DeleteFooterPageForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
 # ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
@@ -226,7 +241,8 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
-    return render_template('login.html', form=form)
+    pages = FooterPage.query.all()
+    return render_template('login.html', form=form, footer_pages=pages)
 
 @app.route('/logout')
 @login_required
@@ -539,6 +555,57 @@ def admin_remove_trainer(user_id):
         flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
         return redirect(url_for('admin_overview'))
     abort(400)
+
+# ----------------------------------------------------
+# Footer-Seiten verwalten
+# ----------------------------------------------------
+@app.route('/admin/footer_pages', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_footer_pages():
+    form = FooterPageForm()
+    delete_form = DeleteFooterPageForm()
+    if form.validate_on_submit():
+        new_page = FooterPage(title=form.title.data, content=form.content.data)
+        db.session.add(new_page)
+        db.session.commit()
+        flash('Seite hinzugefügt!', 'success')
+        return redirect(url_for('admin_footer_pages'))
+    pages = FooterPage.query.all()
+    return render_template('admin_footer_pages.html', pages=pages, form=form, delete_form=delete_form)
+
+@app.route('/admin/footer_page/<int:page_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_footer_page(page_id):
+    page = FooterPage.query.get_or_404(page_id)
+    form = FooterPageForm(obj=page)
+    if form.validate_on_submit():
+        page.title = form.title.data
+        page.content = form.content.data
+        db.session.commit()
+        flash('Seite aktualisiert!', 'success')
+        return redirect(url_for('admin_footer_pages'))
+    return render_template('edit_footer_page.html', form=form, page=page)
+
+@app.route('/admin/footer_page/<int:page_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_footer_page(page_id):
+    page = FooterPage.query.get_or_404(page_id)
+    form = DeleteFooterPageForm()
+    if form.validate_on_submit():
+        db.session.delete(page)
+        db.session.commit()
+        flash('Seite gelöscht!', 'info')
+        return redirect(url_for('admin_footer_pages'))
+    abort(400)
+
+@app.route('/page/<int:page_id>')
+def view_footer_page(page_id):
+    page = FooterPage.query.get_or_404(page_id)
+    html = markdown.markdown(page.content)
+    return render_template('footer_page.html', page=page, html_content=html)
 
 # ----------------------------------------------------
 # Admin-/Trainer-Funktionalitäten für Template-Pläne
