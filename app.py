@@ -82,11 +82,13 @@ class TemplateExercise(db.Model):
     description = db.Column(db.String(300), nullable=True)  # Beschreibung bei Template-Übung
     template_plan_id = db.Column(db.Integer, db.ForeignKey('template_training_plan.id'), nullable=False)
 
+
 # Seiten, die im Login-Footer verlinkt werden
 class FooterPage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     content = db.Column(db.Text, nullable=False)
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -196,12 +198,14 @@ class ToggleTemplateVisibilityForm(FlaskForm):
 class DeleteTemplatePlanForm(FlaskForm):
     submit = SubmitField('Löschen')
 
+
 class FooterPageForm(FlaskForm):
     title = StringField('Seitentitel', validators=[DataRequired()])
     content = TextAreaField('Inhalt (Markdown)', validators=[DataRequired()])
     submit = SubmitField('Speichern')
 
 class DeleteFooterPageForm(FlaskForm):
+
     submit = SubmitField('Löschen')
 
 # ----------------------------------------------------
@@ -243,6 +247,7 @@ def login():
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
     pages = FooterPage.query.all()
     return render_template('login.html', form=form, footer_pages=pages)
+
 
 @app.route('/logout')
 @login_required
@@ -606,6 +611,7 @@ def view_footer_page(page_id):
     page = FooterPage.query.get_or_404(page_id)
     html = markdown.markdown(page.content)
     return render_template('footer_page.html', page=page, html_content=html)
+
 
 # ----------------------------------------------------
 # Admin-/Trainer-Funktionalitäten für Template-Pläne
