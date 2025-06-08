@@ -409,18 +409,27 @@ def delete_session(session_id):
 def sync():
     data = request.get_json()
     sessions_data = data.get('sessions', [])
+    sessions_to_add = []
     for session_info in sessions_data:
+        exercise_id = session_info.get('exercise_id')
+        exercise = Exercise.query.get(exercise_id)
+        if not exercise:
+            return jsonify({'status': 'error', 'message': f'Übung {exercise_id} existiert nicht'}), 400
+        if not any(p.user_id == current_user.id for p in exercise.training_plans):
+            return jsonify({'status': 'error', 'message': 'Unautorisierte Übungs-ID'}), 403
         try:
             timestamp = datetime.datetime.fromisoformat(session_info.get('timestamp'))
         except Exception:
             timestamp = datetime.datetime.now()
         new_session = ExerciseSession(
-            exercise_id=session_info.get('exercise_id'),
+            exercise_id=exercise_id,
             repetitions=session_info.get('repetitions'),
             weight=session_info.get('weight'),
             timestamp=timestamp
         )
-        db.session.add(new_session)
+        sessions_to_add.append(new_session)
+    for sess in sessions_to_add:
+        db.session.add(sess)
     db.session.commit()
     return jsonify({'status': 'success'}), 200
 
