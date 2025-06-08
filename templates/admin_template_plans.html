@@ -31,12 +31,16 @@
               <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-primary btn-sm">Übung hinzufügen</a>
               <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
               <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" style="display:inline;">
-                <button type="submit" class="btn btn-warning btn-sm">
-                  {% if tpl.is_visible %}Unsichtbar{% else %}Sichtbar{% endif %}
-                </button>
+                {{ toggle_form.hidden_tag() }}
+                {% if tpl.is_visible %}
+                {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Unsichtbar') }}
+                {% else %}
+                {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Sichtbar') }}
+                {% endif %}
               </form>
               <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Template Trainingsplan wirklich löschen?');">
-                <button type="submit" class="btn btn-danger btn-sm">Löschen</button>
+                {{ delete_tpl_form.hidden_tag() }}
+                {{ delete_tpl_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
               </form>
             </td>
           </tr>

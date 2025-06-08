@@ -35,17 +35,20 @@
               <td>
                 {% if not user.is_trainer %}
                 <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
-                  <button type="submit" class="btn btn-secondary btn-sm">Trainer setzen</button>
+                  {{ set_trainer_form.hidden_tag() }}
+                  {{ set_trainer_form.submit(class="btn btn-secondary btn-sm", value='Trainer setzen') }}
                 </form>
                 {% else %}
                 <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
-                  <button type="submit" class="btn btn-secondary btn-sm">Trainer entfernen</button>
+                  {{ remove_trainer_form.hidden_tag() }}
+                  {{ remove_trainer_form.submit(class="btn btn-secondary btn-sm", value='Trainer entfernen') }}
                 </form>
                 {% endif %}
                 <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-primary btn-sm">Passwort ändern</a>
                 {% if user.id != current_user.id %}
                   <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
-                    <button type="submit" class="btn btn-danger btn-sm">Löschen</button>
+                    {{ delete_user_form.hidden_tag() }}
+                    {{ delete_user_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
                   </form>
                 {% endif %}
               </td>

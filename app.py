@@ -159,6 +159,31 @@ class TemplateExerciseForm(FlaskForm):
     description = StringField('Beschreibung (optional)')
     submit = SubmitField('Übung hinzufügen')
 
+# Leichtgewichtige Formulare für einfache Aktionen
+class DeleteTrainingPlanForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
+class DeleteExerciseForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
+class DeleteSessionForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
+class DeleteUserForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
+class SetTrainerForm(FlaskForm):
+    submit = SubmitField('Bestätigen')
+
+class RemoveTrainerForm(FlaskForm):
+    submit = SubmitField('Bestätigen')
+
+class ToggleTemplateVisibilityForm(FlaskForm):
+    submit = SubmitField('Umschalten')
+
+class DeleteTemplatePlanForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
 # ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
@@ -233,7 +258,8 @@ def training_plan_detail(training_plan_id):
     training_plan = TrainingPlan.query.get_or_404(training_plan_id)
     if training_plan.user_id != current_user.id:
         abort(403)
-    return render_template('training_plan_detail.html', training_plan=training_plan)
+    delete_plan_form = DeleteTrainingPlanForm()
+    return render_template('training_plan_detail.html', training_plan=training_plan, delete_plan_form=delete_plan_form)
 
 @app.route('/training_plan/<int:training_plan_id>/add_exercise', methods=['GET','POST'])
 @login_required
@@ -301,7 +327,17 @@ def exercise_detail(exercise_id):
             'repetitions': s.repetitions
         }
     all_sessions_serialized = [serialize_session(s) for s in all_sessions]
-    return render_template('exercise_detail.html', exercise=exercise, all_sessions=all_sessions_serialized, sessions=sessions, user_plan=user_plan)
+    delete_exercise_form = DeleteExerciseForm()
+    delete_session_form = DeleteSessionForm()
+    return render_template(
+        'exercise_detail.html',
+        exercise=exercise,
+        all_sessions=all_sessions_serialized,
+        sessions=sessions,
+        user_plan=user_plan,
+        delete_exercise_form=delete_exercise_form,
+        delete_session_form=delete_session_form,
+    )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -325,10 +361,13 @@ def delete_training_plan(training_plan_id):
     training_plan = TrainingPlan.query.get_or_404(training_plan_id)
     if training_plan.user_id != current_user.id:
         abort(403)
-    db.session.delete(training_plan)
-    db.session.commit()
-    flash('Trainingsplan gelöscht!', 'info')
-    return redirect(url_for('dashboard'))
+    form = DeleteTrainingPlanForm()
+    if form.validate_on_submit():
+        db.session.delete(training_plan)
+        db.session.commit()
+        flash('Trainingsplan gelöscht!', 'info')
+        return redirect(url_for('dashboard'))
+    abort(400)
 
 @app.route('/exercise/<int:exercise_id>/delete', methods=['POST'])
 @login_required
@@ -337,12 +376,15 @@ def delete_exercise(exercise_id):
     user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
     if not user_plan:
         abort(403)
-    user_plan.exercises.remove(exercise)
-    if not exercise.training_plans:
-        db.session.delete(exercise)
-    db.session.commit()
-    flash('Übung gelöscht!', 'info')
-    return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
+    form = DeleteExerciseForm()
+    if form.validate_on_submit():
+        user_plan.exercises.remove(exercise)
+        if not exercise.training_plans:
+            db.session.delete(exercise)
+        db.session.commit()
+        flash('Übung gelöscht!', 'info')
+        return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
+    abort(400)
 
 @app.route('/session/<int:session_id>/delete', methods=['POST'])
 @login_required
@@ -351,10 +393,13 @@ def delete_session(session_id):
     if not any(p.user_id == current_user.id for p in session.exercise.training_plans):
         abort(403)
     exercise_id = session.exercise_id
-    db.session.delete(session)
-    db.session.commit()
-    flash('Satz gelöscht!', 'info')
-    return redirect(url_for('exercise_detail', exercise_id=exercise_id))
+    form = DeleteSessionForm()
+    if form.validate_on_submit():
+        db.session.delete(session)
+        db.session.commit()
+        flash('Satz gelöscht!', 'info')
+        return redirect(url_for('exercise_detail', exercise_id=exercise_id))
+    abort(400)
 
 # ----------------------------------------------------
 # Synchronisations-API (für Offline-Daten)
@@ -387,7 +432,16 @@ def sync():
 @admin_required
 def admin_overview():
     users = User.query.order_by(User.registration_date.desc()).all()
-    return render_template('admin_overview.html', users=users)
+    delete_user_form = DeleteUserForm()
+    set_trainer_form = SetTrainerForm()
+    remove_trainer_form = RemoveTrainerForm()
+    return render_template(
+        'admin_overview.html',
+        users=users,
+        delete_user_form=delete_user_form,
+        set_trainer_form=set_trainer_form,
+        remove_trainer_form=remove_trainer_form,
+    )
 
 @app.route('/admin/user/<int:user_id>/change_password', methods=['GET','POST'])
 @login_required
@@ -410,10 +464,13 @@ def admin_delete_user(user_id):
     if user.id == current_user.id:
         flash('Du kannst deinen eigenen Account nicht löschen!', 'danger')
         return redirect(url_for('admin_overview'))
-    db.session.delete(user)
-    db.session.commit()
-    flash(f'Benutzer {user.username} gelöscht!', 'info')
-    return redirect(url_for('admin_overview'))
+    form = DeleteUserForm()
+    if form.validate_on_submit():
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'Benutzer {user.username} gelöscht!', 'info')
+        return redirect(url_for('admin_overview'))
+    abort(400)
 
 # Rolle: Trainer setzen/entfernen
 @app.route('/admin/user/<int:user_id>/set_trainer', methods=['POST'])
@@ -424,10 +481,13 @@ def admin_set_trainer(user_id):
     if user.id == current_user.id:
         flash("Du kannst dir selbst nicht den Trainer-Rang geben.", "danger")
         return redirect(url_for('admin_overview'))
-    user.is_trainer = True
-    db.session.commit()
-    flash(f"{user.username} wurde der Trainer-Rang zugewiesen.", "success")
-    return redirect(url_for('admin_overview'))
+    form = SetTrainerForm()
+    if form.validate_on_submit():
+        user.is_trainer = True
+        db.session.commit()
+        flash(f"{user.username} wurde der Trainer-Rang zugewiesen.", "success")
+        return redirect(url_for('admin_overview'))
+    abort(400)
 
 @app.route('/admin/user/<int:user_id>/remove_trainer', methods=['POST'])
 @login_required
@@ -437,10 +497,13 @@ def admin_remove_trainer(user_id):
     if user.id == current_user.id:
         flash("Du kannst dir selbst den Trainer-Rang nicht entziehen.", "danger")
         return redirect(url_for('admin_overview'))
-    user.is_trainer = False
-    db.session.commit()
-    flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
-    return redirect(url_for('admin_overview'))
+    form = RemoveTrainerForm()
+    if form.validate_on_submit():
+        user.is_trainer = False
+        db.session.commit()
+        flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
+        return redirect(url_for('admin_overview'))
+    abort(400)
 
 # ----------------------------------------------------
 # Admin-/Trainer-Funktionalitäten für Template-Pläne
@@ -450,7 +513,9 @@ def admin_remove_trainer(user_id):
 @trainer_or_admin_required
 def admin_template_plans():
     templates = TemplateTrainingPlan.query.all()
-    return render_template('admin_template_plans.html', templates=templates)
+    toggle_form = ToggleTemplateVisibilityForm()
+    delete_tpl_form = DeleteTemplatePlanForm()
+    return render_template('admin_template_plans.html', templates=templates, toggle_form=toggle_form, delete_tpl_form=delete_tpl_form)
 
 @app.route('/admin/template_plan/create', methods=['GET', 'POST'])
 @login_required
@@ -507,21 +572,27 @@ def add_exercise_to_template(template_plan_id):
 @trainer_or_admin_required
 def toggle_template_visibility(template_plan_id):
     template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    template_plan.is_visible = not template_plan.is_visible
-    db.session.commit()
-    status = "sichtbar" if template_plan.is_visible else "unsichtbar"
-    flash(f"Template Trainingsplan ist jetzt {status}.", "success")
-    return redirect(url_for('admin_template_plans'))
+    form = ToggleTemplateVisibilityForm()
+    if form.validate_on_submit():
+        template_plan.is_visible = not template_plan.is_visible
+        db.session.commit()
+        status = "sichtbar" if template_plan.is_visible else "unsichtbar"
+        flash(f"Template Trainingsplan ist jetzt {status}.", "success")
+        return redirect(url_for('admin_template_plans'))
+    abort(400)
 
 @app.route('/admin/template_plan/<int:template_plan_id>/delete', methods=['POST'])
 @login_required
 @trainer_or_admin_required
 def delete_template_plan(template_plan_id):
     template_plan = TemplateTrainingPlan.query.get_or_404(template_plan_id)
-    db.session.delete(template_plan)
-    db.session.commit()
-    flash("Template Trainingsplan gelöscht!", "info")
-    return redirect(url_for('admin_template_plans'))
+    form = DeleteTemplatePlanForm()
+    if form.validate_on_submit():
+        db.session.delete(template_plan)
+        db.session.commit()
+        flash("Template Trainingsplan gelöscht!", "info")
+        return redirect(url_for('admin_template_plans'))
+    abort(400)
 
 # ----------------------------------------------------
 # Benutzeransicht für Vorlagen
