@@ -28,8 +28,8 @@
       <p>Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
     </div>
     <footer class="bg-light text-center py-2 fixed-bottom">
-      {% for link in footer_links %}
-        <a href="{{ link.url }}" class="mx-2">{{ link.title }}</a>
+      {% for page in footer_pages %}
+        <a href="{{ url_for('view_footer_page', page_id=page.id) }}" class="mx-2">{{ page.title }}</a>
       {% endfor %}
     </footer>
   </body>
