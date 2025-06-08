@@ -187,7 +187,7 @@ class DeleteTemplatePlanForm(FlaskForm):
 # ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
-@app.route('/')
+@app.route('/fit')
 def index():
     return render_template('index.html')
 
