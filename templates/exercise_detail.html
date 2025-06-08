@@ -35,7 +35,11 @@
       </ul>
       <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
         {{ delete_exercise_form.hidden_tag() }}
-        <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
+        {% if editable %}
+          <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
+        {% else %}
+          <div class="alert alert-warning">Diese Übung kann nicht bearbeitet werden.</div>
+        {% endif %}
         {{ delete_exercise_form.submit(class="btn btn-danger btn-block", value='Übung löschen') }}
       </form>
       <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>

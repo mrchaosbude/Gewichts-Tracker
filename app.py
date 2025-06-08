@@ -106,6 +106,11 @@ def trainer_or_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Helper to check if an exercise belongs only to the current user
+def exercise_owned_exclusively_by(user_id, exercise):
+    """Return True if the exercise is only linked to plans of the given user."""
+    return all(p.user_id == user_id for p in exercise.training_plans)
+
 # ----------------------------------------------------
 # Formulare
 # ----------------------------------------------------
@@ -259,7 +264,16 @@ def training_plan_detail(training_plan_id):
     if training_plan.user_id != current_user.id:
         abort(403)
     delete_plan_form = DeleteTrainingPlanForm()
-    return render_template('training_plan_detail.html', training_plan=training_plan, delete_plan_form=delete_plan_form)
+    editable_map = {
+        ex.id: exercise_owned_exclusively_by(current_user.id, ex)
+        for ex in training_plan.exercises
+    }
+    return render_template(
+        'training_plan_detail.html',
+        training_plan=training_plan,
+        delete_plan_form=delete_plan_form,
+        editable_map=editable_map,
+    )
 
 @app.route('/training_plan/<int:training_plan_id>/add_exercise', methods=['GET','POST'])
 @login_required
@@ -316,6 +330,7 @@ def exercise_detail(exercise_id):
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
+    editable = exercise_owned_exclusively_by(current_user.id, exercise)
     all_sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
@@ -337,6 +352,7 @@ def exercise_detail(exercise_id):
         user_plan=user_plan,
         delete_exercise_form=delete_exercise_form,
         delete_session_form=delete_session_form,
+        editable=editable,
     )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
@@ -346,6 +362,9 @@ def edit_exercise(exercise_id):
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
+    if not exercise_owned_exclusively_by(current_user.id, exercise):
+        flash('Diese Übung wird von anderen Benutzern verwendet und kann nicht bearbeitet werden.', 'warning')
+        return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
     form = ExerciseTemplateForm(obj=exercise)
     if form.validate_on_submit():
         exercise.name = form.name.data
