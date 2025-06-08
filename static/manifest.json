@@ -1,7 +1,7 @@
 {
     "short_name": "FitnessApp",
     "name": "Offline Fitness App",
-    "start_url": "/",
+    "start_url": "/fit",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#007bff",
