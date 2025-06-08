@@ -81,6 +81,12 @@ class TemplateExercise(db.Model):
     description = db.Column(db.String(300), nullable=True)  # Beschreibung bei Template-Übung
     template_plan_id = db.Column(db.Integer, db.ForeignKey('template_training_plan.id'), nullable=False)
 
+# Links die im Login-Footer angezeigt werden
+class FooterLink(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    url = db.Column(db.String(300), nullable=False)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -189,6 +195,14 @@ class ToggleTemplateVisibilityForm(FlaskForm):
 class DeleteTemplatePlanForm(FlaskForm):
     submit = SubmitField('Löschen')
 
+class FooterLinkForm(FlaskForm):
+    title = StringField('Linkname', validators=[DataRequired()])
+    url = StringField('URL', validators=[DataRequired()])
+    submit = SubmitField('Speichern')
+
+class DeleteFooterLinkForm(FlaskForm):
+    submit = SubmitField('Löschen')
+
 # ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
@@ -226,7 +240,8 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
-    return render_template('login.html', form=form)
+    links = FooterLink.query.all()
+    return render_template('login.html', form=form, footer_links=links)
 
 @app.route('/logout')
 @login_required
@@ -538,6 +553,51 @@ def admin_remove_trainer(user_id):
         db.session.commit()
         flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
         return redirect(url_for('admin_overview'))
+    abort(400)
+
+# ----------------------------------------------------
+# Footer Links verwalten
+# ----------------------------------------------------
+@app.route('/admin/footer_links', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_footer_links():
+    form = FooterLinkForm()
+    delete_form = DeleteFooterLinkForm()
+    if form.validate_on_submit():
+        new_link = FooterLink(title=form.title.data, url=form.url.data)
+        db.session.add(new_link)
+        db.session.commit()
+        flash('Link hinzugefügt!', 'success')
+        return redirect(url_for('admin_footer_links'))
+    links = FooterLink.query.all()
+    return render_template('admin_footer_links.html', links=links, form=form, delete_form=delete_form)
+
+@app.route('/admin/footer_link/<int:link_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_footer_link(link_id):
+    link = FooterLink.query.get_or_404(link_id)
+    form = FooterLinkForm(obj=link)
+    if form.validate_on_submit():
+        link.title = form.title.data
+        link.url = form.url.data
+        db.session.commit()
+        flash('Link aktualisiert!', 'success')
+        return redirect(url_for('admin_footer_links'))
+    return render_template('edit_footer_link.html', form=form, link=link)
+
+@app.route('/admin/footer_link/<int:link_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_footer_link(link_id):
+    link = FooterLink.query.get_or_404(link_id)
+    form = DeleteFooterLinkForm()
+    if form.validate_on_submit():
+        db.session.delete(link)
+        db.session.commit()
+        flash('Link gelöscht!', 'info')
+        return redirect(url_for('admin_footer_links'))
     abort(400)
 
 # ----------------------------------------------------
