@@ -282,7 +282,14 @@ def add_exercise_to_plan(training_plan_id):
     if training_plan.user_id != current_user.id:
         abort(403)
     form = ExerciseTemplateForm()
-    existing_exercises = Exercise.query.order_by(Exercise.name).all()
+    existing_exercises = (
+        Exercise.query
+        .join(Exercise.training_plans)
+        .filter(TrainingPlan.user_id == current_user.id)
+        .order_by(Exercise.name)
+        .distinct()
+        .all()
+    )
     if form.validate_on_submit():
         selected_id = request.form.get('existing_exercise_id')
         if selected_id:
