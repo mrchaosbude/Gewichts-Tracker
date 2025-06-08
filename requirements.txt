@@ -1,6 +1,6 @@
 Flask
-Flask_SQLAlchemy
-Flask_Login
-Flask_WTF
+Flask-SQLAlchemy
+Flask-Login
+Flask-WTF
 WTForms
 markdown
