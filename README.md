@@ -29,9 +29,20 @@ Dies ist ein **komplettes** Flask‑Projekt zum Verwalten von Trainingsplänen, 
    - Offline erstellte Daten (Sessions) können lokal gespeichert und bei Online‑Wiederkehr synchronisiert werden
 
 5. **Rollen**
-   - **Admin**: uneingeschränkte Rechte (Benutzerverwaltung, Trainer‑Rang setzen/entziehen, Templates erstellen, Sichtbarkeit umschalten …)  
-   - **Trainer**: ähnliche Rechte wie Admin für Templates (Erstellen, Editieren, Löschen, Sichtbarkeit …)  
+   - **Admin**: uneingeschränkte Rechte (Benutzerverwaltung, Trainer‑Rang setzen/entziehen, Templates erstellen, Sichtbarkeit umschalten …)
+   - **Trainer**: ähnliche Rechte wie Admin für Templates (Erstellen, Editieren, Löschen, Sichtbarkeit …)
    - **Standardbenutzer**: kann eigene Pläne verwalten und Vorlagen übernehmen, sieht jedoch nur sichtbare Vorlagen
+
+## REST API
+
+Die wichtigsten Funktionen können auch programmatisch über eine REST API genutzt werden. Alle Endpunkte
+befinden sich unter dem Präfix `/api` und geben JSON zurück.
+
+Beispiele:
+
+* `POST /api/login` – Benutzer anmelden
+* `GET /api/training_plans` – eigene Trainingspläne abrufen
+* `POST /api/training_plans` – neuen Trainingsplan anlegen
 
 ## Datenbank-Migration auf globale Übungen
 
