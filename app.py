@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, abort, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, abort, jsonify, Blueprint
 import markdown
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -24,7 +24,8 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
+api_bp = Blueprint("api", __name__, url_prefix="/api")
+app.register_blueprint(api_bp)
 # ----------------------------------------------------
 # Datenbankmodelle
 # ----------------------------------------------------
@@ -752,6 +753,143 @@ def add_template_to_account(template_plan_id):
     return redirect(url_for('dashboard'))
 
 # ----------------------------------------------------
+# REST API Endpunkte
+# ----------------------------------------------------
+
+@api_bp.route('/register', methods=['POST'])
+def api_register():
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'username and password required'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'username exists'}), 400
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+    new_user = User(username=username, password=hashed_password, is_admin=(User.query.first() is None))
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'registered'}), 201
+
+
+@api_bp.route('/login', methods=['POST'])
+def api_login():
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    user = User.query.filter_by(username=username).first()
+    if user and check_password_hash(user.password, password):
+        login_user(user)
+        user.last_login = datetime.datetime.now()
+        db.session.commit()
+        return jsonify({'message': 'logged in'})
+    return jsonify({'error': 'invalid credentials'}), 401
+
+
+@api_bp.route('/logout', methods=['POST'])
+@login_required
+def api_logout():
+    logout_user()
+    return jsonify({'message': 'logged out'})
+
+
+@api_bp.route('/training_plans', methods=['GET'])
+@login_required
+def api_get_plans():
+    plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
+    return jsonify([
+        {'id': p.id, 'title': p.title, 'description': p.description}
+        for p in plans
+    ])
+
+
+@api_bp.route('/training_plans', methods=['POST'])
+@login_required
+def api_create_plan():
+    data = request.get_json() or {}
+    title = data.get('title')
+    if not title:
+        return jsonify({'error': 'title required'}), 400
+    plan = TrainingPlan(title=title, description=data.get('description', ''), user_id=current_user.id)
+    db.session.add(plan)
+    db.session.commit()
+    return jsonify({'id': plan.id, 'title': plan.title, 'description': plan.description}), 201
+
+
+@api_bp.route('/training_plans/<int:plan_id>/exercises', methods=['GET'])
+@login_required
+def api_list_exercises(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    return jsonify([
+        {'id': ex.id, 'name': ex.name, 'description': ex.description}
+        for ex in plan.exercises
+    ])
+
+
+@api_bp.route('/training_plans/<int:plan_id>/exercises', methods=['POST'])
+@login_required
+def api_add_exercise(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    data = request.get_json() or {}
+    name = data.get('name')
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+    desc = data.get('description')
+    exercise = Exercise.query.filter_by(name=name, description=desc).first()
+    if not exercise:
+        exercise = Exercise(name=name, description=desc)
+        db.session.add(exercise)
+        db.session.flush()
+    if exercise not in plan.exercises:
+        plan.exercises.append(exercise)
+        db.session.commit()
+    return jsonify({'id': exercise.id, 'name': exercise.name, 'description': exercise.description}), 201
+
+
+@api_bp.route('/exercises/<int:exercise_id>/sessions', methods=['GET'])
+@login_required
+def api_get_sessions(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
+        abort(403)
+    sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
+    return jsonify([
+        {
+            'id': s.id,
+            'timestamp': s.timestamp.isoformat(),
+            'weight': s.weight,
+            'repetitions': s.repetitions,
+        }
+        for s in sessions
+    ])
+
+
+@api_bp.route('/exercises/<int:exercise_id>/sessions', methods=['POST'])
+@login_required
+def api_add_session(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
+        abort(403)
+    data = request.get_json() or {}
+    repetitions = data.get('repetitions')
+    weight = data.get('weight')
+    if repetitions is None or weight is None:
+        return jsonify({'error': 'repetitions and weight required'}), 400
+    new_session = ExerciseSession(
+        exercise_id=exercise_id,
+        repetitions=repetitions,
+        weight=weight,
+        timestamp=datetime.datetime.now(),
+    )
+    db.session.add(new_session)
+    db.session.commit()
+    return jsonify({'id': new_session.id}), 201
+
+
 # Anwendung starten
 # ----------------------------------------------------
 if __name__ == '__main__':
