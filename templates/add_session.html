@@ -22,10 +22,27 @@
         </div>
       </form>
       <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-secondary btn-block">Zurück</a>
+
+      <div class="mt-4">
+        <label for="restTime">Pause (Sekunden)</label>
+        <div class="input-group">
+          <input type="number" id="restTime" class="form-control" value="60" min="1">
+          <div class="input-group-append">
+            <button id="startRest" type="button" class="btn btn-info">Pause starten</button>
+          </div>
+        </div>
+        <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
+      </div>
     </div>
-    <script src="/static/js/main.js"></script>
-    <script>
-      document.querySelector('form').addEventListener('submit', function(e) {
+      <script src="/static/js/main.js"></script>
+      <script>
+        const restInput = document.getElementById('restTime');
+        const savedRest = localStorage.getItem('lastRestTime');
+        if (savedRest) {
+          restInput.value = savedRest;
+        }
+
+        document.querySelector('form').addEventListener('submit', function(e) {
         if (!navigator.onLine) {
           e.preventDefault();
           saveOfflineSession({
@@ -38,6 +55,31 @@
           window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
         }
       });
+
+        function formatTime(sec) {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toString().padStart(2, '0');
+        return m + ':' + s;
+      }
+
+        document.getElementById('startRest').addEventListener('click', function() {
+        const input = document.getElementById('restTime');
+        let remaining = parseInt(input.value, 10) || 0;
+        if (remaining <= 0) { return; }
+        localStorage.setItem('lastRestTime', remaining);
+        const countdownEl = document.getElementById('countdown');
+        countdownEl.textContent = formatTime(remaining);
+        document.getElementById('startRest').disabled = true;
+        input.disabled = true;
+        const interval = setInterval(function() {
+          remaining--;
+          countdownEl.textContent = formatTime(remaining);
+          if (remaining <= 0) {
+            clearInterval(interval);
+            window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+          }
+        }, 1000);
+        });
     </script>
   </body>
 </html>
