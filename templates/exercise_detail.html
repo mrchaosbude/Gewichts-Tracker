@@ -87,6 +87,16 @@
           }
         }
       });
-    </script>
+      </script>
+      <script>
+        // Stelle sicher, dass der Zurück-Button zum Trainingsplan führt
+        history.replaceState({from: 'plan'}, "", "{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
+        history.pushState({from: 'exercise'}, "", location.pathname + location.search);
+        window.addEventListener('popstate', function(e) {
+          if (location.pathname.startsWith('/exercise/') && e.state && e.state.from === 'exercise') {
+            location.replace("{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
+          }
+        });
+      </script>
   </body>
 </html>
