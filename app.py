@@ -25,7 +25,6 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 api_bp = Blueprint("api", __name__, url_prefix="/api")
-app.register_blueprint(api_bp)
 # ----------------------------------------------------
 # Datenbankmodelle
 # ----------------------------------------------------
@@ -889,6 +888,8 @@ def api_add_session(exercise_id):
     db.session.commit()
     return jsonify({'id': new_session.id}), 201
 
+
+app.register_blueprint(api_bp)
 
 # Anwendung starten
 # ----------------------------------------------------
