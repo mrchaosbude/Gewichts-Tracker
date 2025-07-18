@@ -31,8 +31,17 @@
             <button id="startRest" type="button" class="btn btn-info">Pause starten</button>
           </div>
         </div>
-        <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
+      <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
       </div>
+    <!-- Vollbild Pausen-Overlay -->
+    <div id="restOverlay" class="rest-overlay d-none">
+      <svg width="200" height="200" class="mb-3">
+        <circle cx="100" cy="100" r="90" stroke="#555" stroke-width="10" fill="none"/>
+        <circle id="progressCircle" cx="100" cy="100" r="90" stroke="#0d6efd" stroke-width="10" fill="none" stroke-dasharray="565" stroke-dashoffset="0" style="transform: rotate(-90deg); transform-origin: center;"/>
+        <text id="timerText" x="100" y="110" text-anchor="middle" font-size="2em" fill="white">00:00</text>
+      </svg>
+      <div class="text-center">Pause ...</div>
+    </div>
     </div>
       <script src="/static/js/main.js"></script>
       <script>
@@ -62,24 +71,83 @@
         return m + ':' + s;
       }
 
+        const overlay = document.getElementById('restOverlay');
+        const progressCircle = document.getElementById('progressCircle');
+        const timerText = document.getElementById('timerText');
+
         document.getElementById('startRest').addEventListener('click', function() {
         const input = document.getElementById('restTime');
         let remaining = parseInt(input.value, 10) || 0;
         if (remaining <= 0) { return; }
+        const reps = document.getElementById('repetitions').value;
+        const weight = document.getElementById('weight').value;
+        if (!reps || !weight) {
+          alert('Bitte Wiederholungen und Gewicht eingeben.');
+          return;
+        }
         localStorage.setItem('lastRestTime', remaining);
-        const countdownEl = document.getElementById('countdown');
-        countdownEl.textContent = formatTime(remaining);
-        document.getElementById('startRest').disabled = true;
-        input.disabled = true;
-        const interval = setInterval(function() {
-          remaining--;
-          countdownEl.textContent = formatTime(remaining);
-          if (remaining <= 0) {
-            clearInterval(interval);
-            window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+
+        const sessionData = {
+          repetitions: reps,
+          weight: weight
+        };
+
+        function startCountdown() {
+          document.getElementById('startRest').disabled = true;
+          input.disabled = true;
+          overlay.classList.remove('d-none');
+          const total = remaining;
+          const circumference = 565;
+          progressCircle.style.strokeDasharray = circumference;
+          function updateDisplay(sec) {
+            timerText.textContent = formatTime(sec);
+            progressCircle.style.strokeDashoffset = circumference * (1 - sec / total);
           }
-        }, 1000);
+          updateDisplay(remaining);
+          const interval = setInterval(function() {
+            remaining--;
+            updateDisplay(remaining);
+            if (remaining <= 0) {
+              clearInterval(interval);
+              window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+            }
+          }, 1000);
+        }
+
+        if (navigator.onLine) {
+          fetch('/api/exercises/{{ exercise.id }}/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sessionData)
+          }).then(startCountdown).catch(function() {
+            alert('Fehler beim Speichern der Session.');
+          });
+        } else {
+          saveOfflineSession({
+            exercise_id: {{ exercise.id }},
+            repetitions: reps,
+            weight: weight,
+            timestamp: new Date().toISOString()
+          });
+          startCountdown();
+        }
         });
     </script>
+    <style>
+      .rest-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+      }
+    </style>
   </body>
 </html>
