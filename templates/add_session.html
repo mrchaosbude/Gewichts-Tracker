@@ -74,6 +74,24 @@
         const overlay = document.getElementById('restOverlay');
         const progressCircle = document.getElementById('progressCircle');
         const timerText = document.getElementById('timerText');
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+          if ('wakeLock' in navigator) {
+            try {
+              wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {
+              console.error('Wake Lock error:', err);
+            }
+          }
+        }
+
+        function releaseWakeLock() {
+          if (wakeLock) {
+            wakeLock.release();
+            wakeLock = null;
+          }
+        }
 
         document.getElementById('startRest').addEventListener('click', function() {
         const input = document.getElementById('restTime');
@@ -103,12 +121,15 @@
             timerText.textContent = formatTime(sec);
             progressCircle.style.strokeDashoffset = circumference * (1 - sec / total);
           }
+          const endTime = Date.now() + remaining * 1000;
           updateDisplay(remaining);
-          const interval = setInterval(function() {
-            remaining--;
-            updateDisplay(remaining);
+          requestWakeLock();
+          const interval = setInterval(() => {
+            remaining = Math.ceil((endTime - Date.now()) / 1000);
+            updateDisplay(Math.max(remaining, 0));
             if (remaining <= 0) {
               clearInterval(interval);
+              releaseWakeLock();
               window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
             }
           }, 1000);
