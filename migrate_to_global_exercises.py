@@ -84,9 +84,19 @@ def migrate(db_path=DB_PATH):
 
     c.execute('ALTER TABLE exercise RENAME TO exercise_old;')
     c.execute('CREATE TABLE exercise (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT);')
-
-    ensure_plan_exercises_schema(c)
-    ensure_exercise_session_schema(c)
+    c.execute('CREATE TABLE plan_exercises (training_plan_id INTEGER NOT NULL, exercise_id INTEGER NOT NULL, PRIMARY KEY(training_plan_id, exercise_id));')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS exercise_session (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exercise_id INTEGER NOT NULL,
+            repetitions INTEGER NOT NULL,
+            weight INTEGER NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT,
+            perceived_exertion INTEGER,
+            FOREIGN KEY(exercise_id) REFERENCES exercise(id)
+        );
+    ''')
 
     for row in c.execute('SELECT id, name, description, training_plan_id FROM exercise_old;').fetchall():
         ex_id, name, desc, plan_id = row
