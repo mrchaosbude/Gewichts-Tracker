@@ -23,6 +23,7 @@ import io
 import json
 import csv
 import zipfile
+from pathlib import Path
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
@@ -35,6 +36,44 @@ app.config['RECAPTCHA_PRIVATE_KEY'] = 'dein_recaptcha_private_key'
 app.config['RECAPTCHA_ENABLED'] = False
 
 db = SQLAlchemy(app)
+
+
+def _resolve_sqlite_path(database_uri: str) -> str | None:
+    """Return an absolute filesystem path for sqlite URIs."""
+
+    if not database_uri.startswith('sqlite'):
+        return None
+
+    if database_uri.endswith(':memory:'):
+        return None
+
+    if database_uri.startswith('sqlite:////'):
+        # Absolute path
+        return database_uri.replace('sqlite:////', '/', 1)
+
+    if database_uri.startswith('sqlite:///'):
+        relative_path = database_uri.replace('sqlite:///', '', 1)
+        return str((Path(app.root_path) / relative_path).resolve())
+
+    return None
+
+
+def _run_startup_migrations() -> None:
+    """Ensure the database schema contains the latest columns."""
+
+    from migrate_add_session_notes_rpe import migrate as migrate_session_notes
+
+    db_path = _resolve_sqlite_path(app.config.get('SQLALCHEMY_DATABASE_URI', ''))
+    if not db_path:
+        return
+
+    try:
+        migrate_session_notes(db_path=db_path)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        app.logger.warning('Failed to run exercise session migration: %s', exc)
+
+
+_run_startup_migrations()
 
 # Flask-Login konfigurieren
 login_manager = LoginManager()
