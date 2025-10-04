@@ -1,13 +1,25 @@
 // Speichert offline erstellte Sessions in LocalStorage
 function saveOfflineSession(sessionData) {
     let offlineSessions = JSON.parse(localStorage.getItem('offlineSessions')) || [];
-    offlineSessions.push(sessionData);
+    const normalizedSession = { ...sessionData };
+    if (normalizedSession.notes === undefined) {
+      normalizedSession.notes = null;
+    }
+    if (normalizedSession.perceived_exertion === undefined) {
+      normalizedSession.perceived_exertion = null;
+    }
+    offlineSessions.push(normalizedSession);
     localStorage.setItem('offlineSessions', JSON.stringify(offlineSessions));
   }
   
   // Synchronisation beim Online-Gehen
   window.addEventListener('online', function() {
     let offlineSessions = JSON.parse(localStorage.getItem('offlineSessions')) || [];
+    offlineSessions = offlineSessions.map(session => ({
+      ...session,
+      notes: session.notes ?? null,
+      perceived_exertion: session.perceived_exertion ?? null,
+    }));
     if (offlineSessions.length > 0) {
       fetch('/sync', {
         method: 'POST',

@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField
-from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError
+from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 
@@ -66,6 +66,8 @@ class ExerciseSession(db.Model):
     repetitions = db.Column(db.Integer, nullable=False)
     weight = db.Column(db.Integer, nullable=False)  # Gewicht als Integer
     timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    notes = db.Column(db.Text)
+    perceived_exertion = db.Column(db.Integer)
 
 # Modelle für Template Trainingspläne
 class TemplateTrainingPlan(db.Model):
@@ -154,6 +156,12 @@ class ExerciseTemplateForm(FlaskForm):
 class ExerciseSessionForm(FlaskForm):
     repetitions = IntegerField('Wiederholungen', validators=[DataRequired()], render_kw={"onfocus": "this.select()"})
     weight = IntegerField('Gewicht (kg)', validators=[InputRequired()], render_kw={"step": "1", "onfocus": "this.select()"})
+    perceived_exertion = IntegerField(
+        'RPE (optional)',
+        validators=[Optional(), NumberRange(min=1, max=10)],
+        render_kw={"min": "1", "max": "10", "onfocus": "this.select()"}
+    )
+    notes = TextAreaField('Notizen', render_kw={"rows": 3})
     submit = SubmitField('Session hinzufügen')
 
 class AdminChangePasswordForm(FlaskForm):
@@ -338,12 +346,16 @@ def add_session(exercise_id):
         if last_session:
             form.repetitions.data = last_session.repetitions
             form.weight.data = int(last_session.weight)
+            form.perceived_exertion.data = last_session.perceived_exertion
+            form.notes.data = last_session.notes
     if form.validate_on_submit():
         new_session = ExerciseSession(
             exercise_id=exercise_id,
             repetitions=form.repetitions.data,
             weight=form.weight.data,
-            timestamp=datetime.datetime.now()
+            timestamp=datetime.datetime.now(),
+            perceived_exertion=form.perceived_exertion.data,
+            notes=form.notes.data,
         )
         db.session.add(new_session)
         db.session.commit()
@@ -367,7 +379,9 @@ def exercise_detail(exercise_id):
             'id': s.id,
             'timestamp': s.timestamp.strftime('%d.%m.%Y %H:%M'),
             'weight': s.weight,
-            'repetitions': s.repetitions
+            'repetitions': s.repetitions,
+            'notes': s.notes,
+            'perceived_exertion': s.perceived_exertion,
         }
     all_sessions_serialized = [serialize_session(s) for s in all_sessions]
     delete_exercise_form = DeleteExerciseForm()
@@ -468,11 +482,21 @@ def sync():
             timestamp = datetime.datetime.fromisoformat(session_info.get('timestamp'))
         except Exception:
             timestamp = datetime.datetime.now()
+        perceived_exertion = session_info.get('perceived_exertion')
+        if perceived_exertion == '' or perceived_exertion is None:
+            perceived_exertion = None
+        else:
+            try:
+                perceived_exertion = int(perceived_exertion)
+            except (TypeError, ValueError):
+                perceived_exertion = None
         new_session = ExerciseSession(
             exercise_id=exercise_id,
             repetitions=session_info.get('repetitions'),
             weight=session_info.get('weight'),
-            timestamp=timestamp
+            timestamp=timestamp,
+            notes=session_info.get('notes'),
+            perceived_exertion=perceived_exertion,
         )
         sessions_to_add.append(new_session)
     for sess in sessions_to_add:
@@ -862,6 +886,8 @@ def api_get_sessions(exercise_id):
             'timestamp': s.timestamp.isoformat(),
             'weight': s.weight,
             'repetitions': s.repetitions,
+            'notes': s.notes,
+            'perceived_exertion': s.perceived_exertion,
         }
         for s in sessions
     ])
@@ -876,13 +902,24 @@ def api_add_session(exercise_id):
     data = request.get_json() or {}
     repetitions = data.get('repetitions')
     weight = data.get('weight')
+    notes = data.get('notes')
+    perceived_exertion = data.get('perceived_exertion')
     if repetitions is None or weight is None:
         return jsonify({'error': 'repetitions and weight required'}), 400
+    if perceived_exertion == '' or perceived_exertion is None:
+        perceived_exertion = None
+    else:
+        try:
+            perceived_exertion = int(perceived_exertion)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'perceived_exertion must be an integer'}), 400
     new_session = ExerciseSession(
         exercise_id=exercise_id,
         repetitions=repetitions,
         weight=weight,
         timestamp=datetime.datetime.now(),
+        notes=notes,
+        perceived_exertion=perceived_exertion,
     )
     db.session.add(new_session)
     db.session.commit()

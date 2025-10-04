@@ -18,6 +18,12 @@
           {{ form.weight.label }} {{ form.weight(class="form-control", pattern="\d*") }}
         </div>
         <div class="form-group">
+          {{ form.perceived_exertion.label }} {{ form.perceived_exertion(class="form-control", pattern="\d*") }}
+        </div>
+        <div class="form-group">
+          {{ form.notes.label }} {{ form.notes(class="form-control") }}
+        </div>
+        <div class="form-group">
           {{ form.submit(class="btn btn-primary btn-block") }}
         </div>
       </form>
@@ -54,10 +60,15 @@
         document.querySelector('form').addEventListener('submit', function(e) {
         if (!navigator.onLine) {
           e.preventDefault();
+          const rpeValue = document.getElementById('perceived_exertion').value;
+          const parsedRpe = rpeValue ? parseInt(rpeValue, 10) : null;
+          const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
           saveOfflineSession({
             exercise_id: {{ exercise.id }},
             repetitions: document.getElementById('repetitions').value,
             weight: document.getElementById('weight').value,
+            perceived_exertion: normalizedRpe,
+            notes: document.getElementById('notes').value || null,
             timestamp: new Date().toISOString()
           });
           alert('Offline: Session wird gespeichert und beim n\u00e4chsten Online-Sein synchronisiert.');
@@ -99,6 +110,10 @@
         if (remaining <= 0) { return; }
         const reps = document.getElementById('repetitions').value;
         const weight = document.getElementById('weight').value;
+        const notes = document.getElementById('notes').value;
+        const rpeRaw = document.getElementById('perceived_exertion').value;
+        const parsedRpe = rpeRaw ? parseInt(rpeRaw, 10) : null;
+        const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
         if (!reps || !weight) {
           alert('Bitte Wiederholungen und Gewicht eingeben.');
           return;
@@ -107,7 +122,9 @@
 
         const sessionData = {
           repetitions: reps,
-          weight: weight
+          weight: weight,
+          notes: notes || null,
+          perceived_exertion: normalizedRpe
         };
 
         function startCountdown() {
@@ -148,6 +165,8 @@
             exercise_id: {{ exercise.id }},
             repetitions: reps,
             weight: weight,
+            notes: notes || null,
+            perceived_exertion: normalizedRpe,
             timestamp: new Date().toISOString()
           });
           startCountdown();

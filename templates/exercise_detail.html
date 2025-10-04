@@ -25,7 +25,19 @@
       <ul class="list-group">
         {% for session in sessions %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</span>
+            <div>
+              <div>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</div>
+              {% if session.perceived_exertion is not none or session.notes %}
+                <div class="mt-1 small text-muted">
+                  {% if session.perceived_exertion is not none %}
+                    <div>RPE: {{ session.perceived_exertion }}</div>
+                  {% endif %}
+                  {% if session.notes %}
+                    <div>Notizen: {{ session.notes.replace('\n', '<br>')|safe }}</div>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
             <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');">
               {{ delete_session_form.hidden_tag() }}
               {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×") }}
@@ -49,6 +61,8 @@
       const labels = allSessions.map(s => s.timestamp);
       const weights = allSessions.map(s => s.weight);
       const repetitions = allSessions.map(s => s.repetitions);
+      const notes = allSessions.map(s => s.notes || '');
+      const perceivedExertion = allSessions.map(s => s.perceived_exertion);
       const ctx = document.getElementById('progressChart').getContext('2d');
       const progressChart = new Chart(ctx, {
         type: 'line',
@@ -76,6 +90,25 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                afterBody: function(context) {
+                  const index = context[0].dataIndex;
+                  const details = [];
+                  const rpeValue = perceivedExertion[index];
+                  const noteValue = notes[index];
+                  if (rpeValue !== null && rpeValue !== undefined) {
+                    details.push('RPE: ' + rpeValue);
+                  }
+                  if (noteValue) {
+                    details.push('Notizen: ' + noteValue);
+                  }
+                  return details;
+                }
+              }
+            }
+          },
           scales: {
             x: {
               title: { display: true, text: 'Datum und Uhrzeit' }
