@@ -8,6 +8,13 @@ def migrate(db_path=DB_PATH):
     conn = sqlite3.connect(db_path)
     try:
         cursor = conn.cursor()
+        table_exists = cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='exercise_session';"
+        ).fetchone()
+        if not table_exists:
+            print("Table 'exercise_session' does not exist. Skipping migration.")
+            return
+
         columns = [row[1] for row in cursor.execute("PRAGMA table_info(exercise_session)").fetchall()]
         added = False
         if 'notes' not in columns:
