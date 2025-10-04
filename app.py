@@ -1,4 +1,16 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, abort, jsonify, Blueprint
+from flask import (
+    Flask,
+    render_template,
+    redirect,
+    url_for,
+    flash,
+    request,
+    abort,
+    jsonify,
+    Blueprint,
+    Response,
+    send_file,
+)
 import markdown
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -7,6 +19,10 @@ from wtforms import StringField, PasswordField, SubmitField, IntegerField, Boole
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
+import io
+import json
+import csv
+import zipfile
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
@@ -986,10 +1002,7 @@ def api_logout():
 @login_required
 def api_get_plans():
     plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
-    return jsonify([
-        {'id': p.id, 'title': p.title, 'description': p.description}
-        for p in plans
-    ])
+    return jsonify([serialize_training_plan(p) for p in plans])
 
 
 @api_bp.route('/training_plans', methods=['POST'])
@@ -1011,10 +1024,7 @@ def api_list_exercises(plan_id):
     plan = TrainingPlan.query.get_or_404(plan_id)
     if plan.user_id != current_user.id:
         abort(403)
-    return jsonify([
-        {'id': ex.id, 'name': ex.name, 'description': ex.description}
-        for ex in plan.exercises
-    ])
+    return jsonify([serialize_exercise(ex) for ex in plan.exercises])
 
 
 @api_bp.route('/training_plans/<int:plan_id>/exercises', methods=['POST'])
@@ -1047,17 +1057,7 @@ def api_get_sessions(exercise_id):
         abort(403)
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
     include_aggregates = request.args.get('include_aggregates', '').lower() in ('1', 'true', 'yes')
-    serialized_sessions = [
-        {
-            'id': s.id,
-            'timestamp': s.timestamp.isoformat(),
-            'weight': s.weight,
-            'repetitions': s.repetitions,
-            'notes': s.notes,
-            'perceived_exertion': s.perceived_exertion,
-        }
-        for s in sessions
-    ]
+    serialized_sessions = [serialize_session(s) for s in sessions]
     if not include_aggregates:
         return jsonify(serialized_sessions)
 
@@ -1105,6 +1105,161 @@ def api_add_session(exercise_id):
 
 
 app.register_blueprint(api_bp)
+
+
+def serialize_training_plan(plan):
+    return {
+        'id': plan.id,
+        'title': plan.title,
+        'description': plan.description,
+    }
+
+
+def serialize_exercise(exercise):
+    return {
+        'id': exercise.id,
+        'name': exercise.name,
+        'description': exercise.description,
+    }
+
+
+def serialize_session(session):
+    return {
+        'id': session.id,
+        'timestamp': session.timestamp.isoformat() if session.timestamp else None,
+        'weight': session.weight,
+        'repetitions': session.repetitions,
+        'notes': session.notes,
+        'perceived_exertion': session.perceived_exertion,
+    }
+
+
+@app.route('/export/training-data')
+@login_required
+def export_training_data():
+    export_format = request.args.get('format', 'json').lower()
+    compress = request.args.get('zip', '').lower() in ('1', 'true', 'yes', 'y')
+
+    plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
+
+    plan_exports = []
+    exercise_cache = {}
+    session_rows = []
+
+    for plan in plans:
+        plan_dict = serialize_training_plan(plan)
+        serialized_exercises = []
+        if not plan.exercises:
+            plan_exports.append({**plan_dict, 'exercises': []})
+            session_rows.append({'plan': plan_dict, 'exercise': None, 'session': None})
+            continue
+        for exercise in plan.exercises:
+            if exercise.id not in exercise_cache:
+                exercise_cache[exercise.id] = serialize_exercise(exercise)
+            sessions = (
+                ExerciseSession.query
+                .filter_by(exercise_id=exercise.id)
+                .order_by(ExerciseSession.timestamp.asc())
+                .all()
+            )
+            serialized_sessions = [serialize_session(s) for s in sessions]
+            if serialized_sessions:
+                for session in serialized_sessions:
+                    session_rows.append({
+                        'plan': plan_dict,
+                        'exercise': exercise_cache[exercise.id],
+                        'session': session,
+                    })
+            else:
+                session_rows.append({
+                    'plan': plan_dict,
+                    'exercise': exercise_cache[exercise.id],
+                    'session': None,
+                })
+            serialized_exercises.append({
+                **exercise_cache[exercise.id],
+                'sessions': serialized_sessions,
+            })
+        plan_exports.append({**plan_dict, 'exercises': serialized_exercises})
+
+    if export_format not in ('json', 'csv'):
+        abort(400, description='Unsupported format. Use "json" or "csv".')
+
+    timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+
+    if export_format == 'json':
+        payload = {
+            'exported_at': timestamp.isoformat(),
+            'format': 'json',
+            'training_plans': plan_exports,
+        }
+        json_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode('utf-8')
+        if compress:
+            memory_file = io.BytesIO()
+            with zipfile.ZipFile(memory_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('training-data.json', json_bytes)
+            memory_file.seek(0)
+            return send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name='training-data.zip',
+            )
+        return Response(json_bytes, mimetype='application/json')
+
+    # CSV export
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow([
+        'plan_id',
+        'plan_title',
+        'plan_description',
+        'exercise_id',
+        'exercise_name',
+        'exercise_description',
+        'session_id',
+        'timestamp',
+        'weight',
+        'repetitions',
+        'notes',
+        'perceived_exertion',
+    ])
+
+    for row in session_rows:
+        plan = row['plan']
+        exercise = row['exercise']
+        session = row['session']
+        writer.writerow([
+            plan['id'],
+            plan['title'],
+            plan['description'],
+            exercise['id'] if exercise else '',
+            exercise['name'] if exercise else '',
+            exercise['description'] if exercise else '',
+            session['id'] if session else '',
+            session['timestamp'] if session else '',
+            session['weight'] if session else '',
+            session['repetitions'] if session else '',
+            session['notes'] if session else '',
+            session['perceived_exertion'] if session else '',
+        ])
+
+    csv_bytes = csv_buffer.getvalue().encode('utf-8')
+    if compress:
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('training-data.csv', csv_bytes)
+        memory_file.seek(0)
+        return send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='training-data.zip',
+        )
+
+    response = Response(csv_bytes, mimetype='text/csv; charset=utf-8')
+    response.headers['Content-Disposition'] = 'attachment; filename=training-data.csv'
+    return response
 
 # Anwendung starten
 # ----------------------------------------------------
