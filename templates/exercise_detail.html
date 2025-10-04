@@ -82,7 +82,7 @@
             {% if session.perceived_exertion is not none or session.notes %}
               <div class="mt-1 small text-muted">
                 {% if session.perceived_exertion is not none %}
-                  <div>RPE: {{ session.perceived_exertion }}</div>
+                  <div>Wahrgenommene Anstrengung (RPE): {{ session.perceived_exertion }}</div>
                 {% endif %}
                 {% if session.notes %}
                   <div>Notizen: {{ session.notes.replace('\n', '<br>')|safe }}</div>
@@ -203,7 +203,7 @@
                 const rpeValue = perceivedExertion[index];
                 const noteValue = notes[index];
                 if (rpeValue !== null && rpeValue !== undefined) {
-                  details.push('RPE: ' + rpeValue);
+                  details.push('Wahrgenommene Anstrengung (RPE): ' + rpeValue);
                 }
                 if (noteValue) {
                   details.push('Notizen: ' + noteValue);
