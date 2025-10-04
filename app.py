@@ -198,7 +198,7 @@ class ExerciseSessionForm(FlaskForm):
     repetitions = IntegerField('Wiederholungen', validators=[DataRequired()], render_kw={"onfocus": "this.select()"})
     weight = IntegerField('Gewicht (kg)', validators=[InputRequired()], render_kw={"step": "1", "onfocus": "this.select()"})
     perceived_exertion = IntegerField(
-        'RPE (optional)',
+        'Wahrgenommene Anstrengung (RPE 1-10, optional)',
         validators=[Optional(), NumberRange(min=1, max=10)],
         render_kw={"min": "1", "max": "10", "onfocus": "this.select()"}
     )
