@@ -23,10 +23,7 @@ import io
 import json
 import csv
 import zipfile
-from pathlib import Path
 import os
-
-from sqlalchemy import inspect
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
@@ -41,59 +38,19 @@ app.config['RECAPTCHA_ENABLED'] = False
 db = SQLAlchemy(app)
 
 
-def _resolve_sqlite_path(database_uri: str) -> str | None:
-    """Return an absolute filesystem path for sqlite URIs."""
+def _ensure_database_setup_once() -> None:
+    """Ensure database tables exist once per application lifecycle."""
 
-    if not database_uri.startswith('sqlite'):
-        return None
-
-    if database_uri.endswith(':memory:'):
-        return None
-
-    if database_uri.startswith('sqlite:////'):
-        # Absolute path
-        return database_uri.replace('sqlite:////', '/', 1)
-
-    if database_uri.startswith('sqlite:///'):
-        relative_path = database_uri.replace('sqlite:///', '', 1)
-        return str((Path(app.root_path) / relative_path).resolve())
-
-    return None
-
-
-def _run_startup_migrations() -> None:
-    """Ensure the database schema contains the latest tables and columns."""
-
-    from migrate_add_session_notes_rpe import migrate as migrate_session_notes
-
-    with app.app_context():
-        try:
-            inspector = inspect(db.engine)
-            existing_tables = set(inspector.get_table_names())
-            defined_tables = set(db.metadata.tables.keys())
-            if defined_tables - existing_tables:
-                db.create_all()
-        except Exception as exc:  # pragma: no cover - defensive logging
-            app.logger.warning('Failed to ensure database tables: %s', exc)
-
-    db_path = _resolve_sqlite_path(app.config.get('SQLALCHEMY_DATABASE_URI', ''))
-    if not db_path:
+    if getattr(app, '_database_setup_ran', False):
         return
 
     try:
-        migrate_session_notes(db_path=db_path)
+        with app.app_context():
+            db.create_all()
     except Exception as exc:  # pragma: no cover - defensive logging
-        app.logger.warning('Failed to run exercise session migration: %s', exc)
+        app.logger.warning('Failed to ensure database tables: %s', exc)
 
-
-def _ensure_startup_migrations_once() -> None:
-    """Run startup migrations once per application lifecycle."""
-
-    if getattr(app, '_startup_migrations_ran', False):
-        return
-
-    _run_startup_migrations()
-    app._startup_migrations_ran = True
+    app._database_setup_ran = True
 
 
 # Flask-Login konfigurieren
@@ -1321,24 +1278,24 @@ def export_training_data():
     response.headers['Content-Disposition'] = 'attachment; filename=training-data.csv'
     return response
 
-_ensure_startup_migrations_once()
+_ensure_database_setup_once()
 
 
 if hasattr(app, 'before_first_request'):
 
     @app.before_first_request
     def _ensure_tables_before_first_request() -> None:
-        """Run startup migrations before handling the first request."""
+        """Ensure database tables exist before handling the first request."""
 
-        _ensure_startup_migrations_once()
+        _ensure_database_setup_once()
 
 else:
 
     @app.before_request
     def _ensure_tables_before_request() -> None:
-        """Run startup migrations before handling the first request."""
+        """Ensure database tables exist before handling the first request."""
 
-        _ensure_startup_migrations_once()
+        _ensure_database_setup_once()
 
 
 # Anwendung starten
