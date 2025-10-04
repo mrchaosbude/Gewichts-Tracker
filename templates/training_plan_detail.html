@@ -92,32 +92,28 @@
         </table>
       </div>
       <h3>Übungen</h3>
-      <ul class="list-group" id="exercise-list">
+      <ul class="list-group">
         {% for item in exercise_overview %}
-          {% set collapse_id = 'sessions-' ~ loop.index %}
           <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
+            <div class="d-flex justify-content-between">
+              <div class="pr-3">
                 <strong>{{ item.exercise.name }}</strong>
                 {% if item.exercise.description %}
-                  <p class="mb-0 small text-muted">{{ item.exercise.description }}</p>
+                  <p class="mb-2 small text-muted">{{ item.exercise.description }}</p>
                 {% endif %}
+                <div class="session-list">
+                  {% for session in item.recent_sessions %}
+                    <div>
+                      {{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen
+                    </div>
+                  {% else %}
+                    <div class="text-muted">Noch keine Einheiten erfasst.</div>
+                  {% endfor %}
+                </div>
               </div>
-              <div class="d-flex align-items-center">
-                <button class="btn btn-outline-secondary btn-sm mr-2" type="button" data-toggle="collapse" data-target="#{{ collapse_id }}" aria-expanded="false" aria-controls="{{ collapse_id }}">
-                  Einheiten anzeigen
-                </button>
+              <div class="d-flex align-items-start">
                 <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="btn btn-info btn-sm">Details</a>
               </div>
-            </div>
-            <div id="{{ collapse_id }}" class="session-list mt-2 collapse" data-parent="#exercise-list">
-              {% for session in item.recent_sessions %}
-                <div>
-                  {{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen
-                </div>
-              {% else %}
-                <div class="text-muted">Noch keine Einheiten erfasst.</div>
-              {% endfor %}
             </div>
           </li>
         {% endfor %}
@@ -129,27 +125,3 @@
   </div>
 {% endblock %}
 
-{% block extra_scripts %}
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      var toggles = document.querySelectorAll('[data-toggle="collapse"]');
-      toggles.forEach(function (toggle) {
-        toggle.textContent = 'Einheiten anzeigen';
-        var targetSelector = toggle.getAttribute('data-target');
-        if (!targetSelector) {
-          return;
-        }
-        var target = document.querySelector(targetSelector);
-        if (!target) {
-          return;
-        }
-        target.addEventListener('show.bs.collapse', function () {
-          toggle.textContent = 'Einheiten verbergen';
-        });
-        target.addEventListener('hide.bs.collapse', function () {
-          toggle.textContent = 'Einheiten anzeigen';
-        });
-      });
-    });
-  </script>
-{% endblock %}
