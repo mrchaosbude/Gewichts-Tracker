@@ -17,6 +17,52 @@
       {% if exercise.description %}
         <p class="text-center text-muted">{{ exercise.description }}</p>
       {% endif %}
+      {% if summary_metrics.total_sessions %}
+        <div class="row text-center mb-4">
+          <div class="col-sm-6 col-lg-3 mb-3">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <h6 class="text-uppercase text-muted">Gesamtvolumen</h6>
+                <h4 class="mb-1">{{ summary_metrics.total_volume|round(1) }} kg</h4>
+                <div class="small text-muted">{{ summary_metrics.total_sessions }} Sätze insgesamt</div>
+                <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_volume_average|round(1) }} kg</div>
+                <div class="small text-muted">Bester Satz: {{ personal_bests.max_volume.value }} kg am {{ personal_bests.max_volume.timestamp.strftime('%d.%m.%Y') }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3 mb-3">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <h6 class="text-uppercase text-muted">Letzte Einheit</h6>
+                <h5 class="mb-1">{{ summary_metrics.latest_session.weight }} kg × {{ summary_metrics.latest_session.repetitions }}</h5>
+                <div class="small text-muted">{{ summary_metrics.latest_session.timestamp.strftime('%d.%m.%Y %H:%M') }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3 mb-3">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <h6 class="text-uppercase text-muted">Max. Gewicht</h6>
+                <h4 class="mb-1">{{ personal_bests.max_weight.value }} kg</h4>
+                <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh · {{ personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }}</div>
+                <div class="small text-muted">Volumen: {{ personal_bests.max_volume.value }} kg</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-lg-3 mb-3">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <h6 class="text-uppercase text-muted">Beste 1RM (Epley)</h6>
+                <h4 class="mb-1">{{ personal_bests.max_one_rm.value|round(1) }} kg</h4>
+                <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }} Wdh</div>
+                <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_one_rm_average|round(1) }} kg</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
+      {% endif %}
       <div id="chartContainer" class="mb-4">
         <canvas id="progressChart"></canvas>
       </div>
@@ -57,12 +103,11 @@
       <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
     </div>
     <script>
-      const allSessions = {{ all_sessions|tojson }};
-      const labels = allSessions.map(s => s.timestamp);
-      const weights = allSessions.map(s => s.weight);
-      const repetitions = allSessions.map(s => s.repetitions);
-      const notes = allSessions.map(s => s.notes || '');
-      const perceivedExertion = allSessions.map(s => s.perceived_exertion);
+      const chartData = {{ chart_data|tojson }};
+      const movingWindow = {{ moving_window }};
+      const labels = chartData.labels;
+      const notes = chartData.notes;
+      const perceivedExertion = chartData.perceived_exertion;
       const ctx = document.getElementById('progressChart').getContext('2d');
       const progressChart = new Chart(ctx, {
         type: 'line',
@@ -71,31 +116,80 @@
           datasets: [
             {
               label: 'Gewicht (kg)',
-              data: weights,
+              data: chartData.weights,
               borderColor: 'rgba(75, 192, 192, 1)',
               backgroundColor: 'rgba(75, 192, 192, 0.2)',
               fill: false,
-              tension: 0.1
+              tension: 0.1,
+              yAxisID: 'yWeight'
             },
             {
               label: 'Wiederholungen',
-              data: repetitions,
+              data: chartData.repetitions,
               borderColor: 'rgba(153, 102, 255, 1)',
               backgroundColor: 'rgba(153, 102, 255, 0.2)',
               fill: false,
-              tension: 0.1
+              tension: 0.1,
+              yAxisID: 'yReps'
+            },
+            {
+              label: 'Volumen (kg)',
+              data: chartData.volume,
+              borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              fill: false,
+              tension: 0.1,
+              yAxisID: 'yVolume'
+            },
+            {
+              label: `Volumen gleitender Ø (${movingWindow})`,
+              data: chartData.moving_avg_volume,
+              borderColor: 'rgba(194, 24, 91, 1)',
+              backgroundColor: 'rgba(194, 24, 91, 0.15)',
+              borderDash: [6, 4],
+              fill: false,
+              tension: 0.2,
+              yAxisID: 'yVolume'
+            },
+            {
+              label: '1RM (Epley)',
+              data: chartData.one_rm,
+              borderColor: 'rgba(255, 159, 64, 1)',
+              backgroundColor: 'rgba(255, 159, 64, 0.2)',
+              fill: false,
+              tension: 0.1,
+              yAxisID: 'yWeight'
+            },
+            {
+              label: `1RM gleitender Ø (${movingWindow})`,
+              data: chartData.moving_avg_one_rm,
+              borderColor: 'rgba(255, 205, 86, 1)',
+              backgroundColor: 'rgba(255, 205, 86, 0.15)',
+              borderDash: [4, 4],
+              fill: false,
+              tension: 0.2,
+              yAxisID: 'yWeight'
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
           plugins: {
             tooltip: {
               callbacks: {
                 afterBody: function(context) {
                   const index = context[0].dataIndex;
                   const details = [];
+                  const volume = chartData.volume[index];
+                  const oneRm = chartData.one_rm[index];
+                  if (volume !== undefined) {
+                    details.push('Volumen: ' + volume + ' kg');
+                  }
+                  if (oneRm !== undefined) {
+                    details.push('1RM (Epley): ' + oneRm.toFixed(1) + ' kg');
+                  }
                   const rpeValue = perceivedExertion[index];
                   const noteValue = notes[index];
                   if (rpeValue !== null && rpeValue !== undefined) {
@@ -113,8 +207,23 @@
             x: {
               title: { display: true, text: 'Datum und Uhrzeit' }
             },
-            y: {
-              title: { display: true, text: 'Wert' },
+            yWeight: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Gewicht / 1RM (kg)' },
+              beginAtZero: true
+            },
+            yVolume: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Volumen (kg)' },
+              beginAtZero: true,
+              grid: { drawOnChartArea: false }
+            },
+            yReps: {
+              type: 'linear',
+              position: 'right',
+              display: false,
               beginAtZero: true
             }
           }

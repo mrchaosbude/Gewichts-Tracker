@@ -217,6 +217,154 @@ class DeleteFooterPageForm(FlaskForm):
     submit = SubmitField('Löschen')
 
 # ----------------------------------------------------
+# Analyse- und Statistik-Helfer
+# ----------------------------------------------------
+
+def _moving_average(values, window):
+    if not values or window <= 0:
+        return []
+    averaged = []
+    for index in range(len(values)):
+        start = max(0, index - window + 1)
+        window_slice = values[start:index + 1]
+        averaged.append(sum(window_slice) / len(window_slice))
+    return averaged
+
+
+def calculate_exercise_statistics(sessions, moving_window=5):
+    sorted_sessions = sorted(sessions, key=lambda s: s.timestamp)
+    chart_data = {
+        'labels': [],
+        'iso_timestamps': [],
+        'weights': [],
+        'repetitions': [],
+        'volume': [],
+        'one_rm': [],
+        'moving_avg_weight': [],
+        'moving_avg_volume': [],
+        'moving_avg_one_rm': [],
+        'notes': [],
+        'perceived_exertion': [],
+    }
+    personal_bests = {
+        'max_weight': None,
+        'max_volume': None,
+        'max_one_rm': None,
+    }
+    summary = {
+        'total_sessions': 0,
+        'total_volume': 0,
+        'average_volume': 0,
+        'average_weight': 0,
+        'latest_session': None,
+        'recent_volume_average': 0,
+        'recent_one_rm_average': 0,
+    }
+    if not sorted_sessions:
+        return {
+            'chart_data': chart_data,
+            'personal_bests': personal_bests,
+            'summary': summary,
+            'moving_window': moving_window,
+        }
+
+    for session in sorted_sessions:
+        chart_data['labels'].append(session.timestamp.strftime('%d.%m.%Y %H:%M'))
+        chart_data['iso_timestamps'].append(session.timestamp.isoformat())
+        chart_data['weights'].append(session.weight)
+        chart_data['repetitions'].append(session.repetitions)
+        chart_data['notes'].append(session.notes or '')
+        chart_data['perceived_exertion'].append(session.perceived_exertion)
+        chart_data['volume'].append(session.weight * session.repetitions)
+        chart_data['one_rm'].append(round(session.weight * (1 + session.repetitions / 30.0), 2))
+
+    moving_avg_weight = _moving_average(chart_data['weights'], moving_window)
+    moving_avg_volume = _moving_average(chart_data['volume'], moving_window)
+    moving_avg_one_rm = _moving_average(chart_data['one_rm'], moving_window)
+    chart_data['moving_avg_weight'] = [round(value, 2) for value in moving_avg_weight]
+    chart_data['moving_avg_volume'] = [round(value, 2) for value in moving_avg_volume]
+    chart_data['moving_avg_one_rm'] = [round(value, 2) for value in moving_avg_one_rm]
+
+    summary['total_sessions'] = len(sorted_sessions)
+    summary['total_volume'] = sum(chart_data['volume'])
+    summary['average_volume'] = summary['total_volume'] / summary['total_sessions'] if summary['total_sessions'] else 0
+    summary['average_weight'] = sum(chart_data['weights']) / summary['total_sessions'] if summary['total_sessions'] else 0
+    summary['latest_session'] = {
+        'timestamp': sorted_sessions[-1].timestamp,
+        'weight': sorted_sessions[-1].weight,
+        'repetitions': sorted_sessions[-1].repetitions,
+        'volume': chart_data['volume'][-1],
+        'one_rm': chart_data['one_rm'][-1],
+    }
+    summary['recent_volume_average'] = round(moving_avg_volume[-1], 2) if moving_avg_volume else 0
+    summary['recent_one_rm_average'] = round(moving_avg_one_rm[-1], 2) if moving_avg_one_rm else 0
+
+    max_weight_index = max(range(len(chart_data['weights'])), key=chart_data['weights'].__getitem__)
+    max_volume_index = max(range(len(chart_data['volume'])), key=chart_data['volume'].__getitem__)
+    max_one_rm_index = max(range(len(chart_data['one_rm'])), key=chart_data['one_rm'].__getitem__)
+
+    personal_bests['max_weight'] = {
+        'value': chart_data['weights'][max_weight_index],
+        'repetitions': chart_data['repetitions'][max_weight_index],
+        'timestamp': sorted_sessions[max_weight_index].timestamp,
+    }
+    personal_bests['max_volume'] = {
+        'value': chart_data['volume'][max_volume_index],
+        'repetitions': chart_data['repetitions'][max_volume_index],
+        'weight': chart_data['weights'][max_volume_index],
+        'timestamp': sorted_sessions[max_volume_index].timestamp,
+    }
+    personal_bests['max_one_rm'] = {
+        'value': chart_data['one_rm'][max_one_rm_index],
+        'repetitions': chart_data['repetitions'][max_one_rm_index],
+        'weight': chart_data['weights'][max_one_rm_index],
+        'timestamp': sorted_sessions[max_one_rm_index].timestamp,
+    }
+
+    return {
+        'chart_data': chart_data,
+        'personal_bests': personal_bests,
+        'summary': summary,
+        'moving_window': moving_window,
+    }
+
+
+def serialize_personal_bests(personal_bests):
+    serialized = {}
+    for key, entry in personal_bests.items():
+        if entry is None:
+            serialized[key] = None
+        else:
+            serialized_entry = {}
+            for entry_key, entry_value in entry.items():
+                if entry_key == 'timestamp' and entry_value is not None:
+                    serialized_entry[entry_key] = entry_value.isoformat()
+                else:
+                    serialized_entry[entry_key] = entry_value
+            serialized[key] = serialized_entry
+    return serialized
+
+
+def serialize_summary(summary):
+    data = {
+        key: value
+        for key, value in summary.items()
+        if key != 'latest_session'
+    }
+    latest_session = summary.get('latest_session')
+    if latest_session:
+        data['latest_session'] = {
+            'timestamp': latest_session['timestamp'].isoformat() if latest_session.get('timestamp') else None,
+            'weight': latest_session.get('weight'),
+            'repetitions': latest_session.get('repetitions'),
+            'volume': latest_session.get('volume'),
+            'one_rm': latest_session.get('one_rm'),
+        }
+    else:
+        data['latest_session'] = None
+    return data
+
+# ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
 @app.route('/fit')
@@ -297,11 +445,23 @@ def training_plan_detail(training_plan_id):
         ex.id: exercise_owned_exclusively_by(current_user.id, ex)
         for ex in training_plan.exercises
     }
+    exercise_overview = []
+    for exercise in training_plan.exercises:
+        stats = calculate_exercise_statistics(exercise.sessions)
+        recent_sessions = sorted(exercise.sessions, key=lambda s: s.timestamp, reverse=True)[:3]
+        exercise_overview.append({
+            'exercise': exercise,
+            'summary': stats['summary'],
+            'personal_bests': stats['personal_bests'],
+            'recent_sessions': recent_sessions,
+            'moving_window': stats['moving_window'],
+        })
     return render_template(
         'training_plan_detail.html',
         training_plan=training_plan,
         delete_plan_form=delete_plan_form,
         editable_map=editable_map,
+        exercise_overview=exercise_overview,
     )
 
 @app.route('/training_plan/<int:training_plan_id>/add_exercise', methods=['GET','POST'])
@@ -374,6 +534,8 @@ def exercise_detail(exercise_id):
     all_sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
+    stats = calculate_exercise_statistics(all_sessions)
+
     def serialize_session(s):
         return {
             'id': s.id,
@@ -395,6 +557,10 @@ def exercise_detail(exercise_id):
         delete_exercise_form=delete_exercise_form,
         delete_session_form=delete_session_form,
         editable=editable,
+        chart_data=stats['chart_data'],
+        summary_metrics=stats['summary'],
+        personal_bests=stats['personal_bests'],
+        moving_window=stats['moving_window'],
     )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
@@ -880,7 +1046,8 @@ def api_get_sessions(exercise_id):
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
-    return jsonify([
+    include_aggregates = request.args.get('include_aggregates', '').lower() in ('1', 'true', 'yes')
+    serialized_sessions = [
         {
             'id': s.id,
             'timestamp': s.timestamp.isoformat(),
@@ -890,7 +1057,18 @@ def api_get_sessions(exercise_id):
             'perceived_exertion': s.perceived_exertion,
         }
         for s in sessions
-    ])
+    ]
+    if not include_aggregates:
+        return jsonify(serialized_sessions)
+
+    stats = calculate_exercise_statistics(sessions)
+    return jsonify({
+        'sessions': serialized_sessions,
+        'chart_data': stats['chart_data'],
+        'summary': serialize_summary(stats['summary']),
+        'personal_bests': serialize_personal_bests(stats['personal_bests']),
+        'moving_window': stats['moving_window'],
+    })
 
 
 @api_bp.route('/exercises/<int:exercise_id>/sessions', methods=['POST'])
