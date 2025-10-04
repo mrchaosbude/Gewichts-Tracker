@@ -7,6 +7,58 @@
     .session-list {
       font-size: 0.9rem;
     }
+
+    .exercise-stats-toggle {
+      margin-bottom: 1rem;
+    }
+
+    .exercise-stats-toggle summary {
+      display: block;
+      cursor: pointer;
+      padding: 0.75rem 1.25rem;
+      margin-bottom: 0;
+      color: #495057;
+      background-color: #fff;
+      border: 1px solid #6c757d;
+      border-radius: 0.25rem;
+      font-weight: 600;
+      list-style: none;
+      position: relative;
+    }
+
+    .exercise-stats-toggle summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .exercise-stats-toggle summary::after {
+      content: '\25bc';
+      position: absolute;
+      right: 1rem;
+      transition: transform 0.2s ease;
+    }
+
+    .exercise-stats-toggle[open] summary::after {
+      transform: rotate(180deg);
+    }
+
+    .exercise-stats-toggle summary:focus {
+      outline: none;
+      box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+    }
+
+    .exercise-stats-toggle[open] summary {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .exercise-stats-body {
+      border: 1px solid #6c757d;
+      border-top: none;
+      border-bottom-left-radius: 0.25rem;
+      border-bottom-right-radius: 0.25rem;
+      padding: 1rem;
+      background-color: #fff;
+    }
   </style>
 {% endblock %}
 
@@ -22,86 +74,79 @@
     <p>{{ training_plan.description }}</p>
     <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success mb-3 btn-block">Übung hinzufügen</a>
     {% if exercise_overview %}
-      <button
-        class="btn btn-outline-secondary btn-block text-left mb-3"
-        type="button"
-        data-toggle="collapse"
-        data-target="#exerciseStatsCollapse"
-        aria-expanded="true"
-        aria-controls="exerciseStatsCollapse"
-      >
-        Übungsstatistiken
-      </button>
-      <div id="exerciseStatsCollapse" class="collapse show">
-        <div class="table-responsive mb-4">
-          <table class="table table-sm table-striped">
-            <thead>
-              <tr>
-                <th>Übung</th>
-                <th class="text-center">Sätze</th>
-                <th>Letzte Einheit</th>
-                <th>Gesamtvolumen</th>
-                <th>Max. Gewicht</th>
-                <th>Beste 1RM (Epley)</th>
-                <th>Ø Volumen ({{ exercise_overview[0].moving_window }}er Ø)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in exercise_overview %}
-                {% set summary = item.summary %}
-                {% set personal_bests = item.personal_bests %}
+      <details id="exerciseStatsToggle" class="exercise-stats-toggle" open>
+        <summary>Übungsstatistiken</summary>
+        <div class="exercise-stats-body">
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-striped">
+              <thead>
                 <tr>
-                  <td>
-                    <strong>{{ item.exercise.name }}</strong>
-                    {% if item.exercise.description %}
-                      <div class="small text-muted">{{ item.exercise.description }}</div>
-                    {% endif %}
-                  </td>
-                  <td class="text-center">{{ summary.total_sessions }}</td>
-                  <td>
-                    {% if summary.latest_session %}
-                      {{ summary.latest_session.timestamp.strftime('%d.%m.%Y') }}<br>
-                      <span class="small text-muted">{{ summary.latest_session.weight }} kg × {{ summary.latest_session.repetitions }}</span>
-                    {% else %}
-                      <span class="text-muted">–</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if summary.total_sessions %}
-                      {{ summary.total_volume|round(1) }} kg
-                    {% else %}
-                      <span class="text-muted">–</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if personal_bests.max_weight %}
-                      {{ personal_bests.max_weight.value }} kg
-                      <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh</div>
-                    {% else %}
-                      <span class="text-muted">–</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if personal_bests.max_one_rm %}
-                      {{ personal_bests.max_one_rm.value|round(1) }} kg
-                      <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }}</div>
-                    {% else %}
-                      <span class="text-muted">–</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if summary.total_sessions %}
-                      {{ summary.recent_volume_average|round(1) }} kg
-                    {% else %}
-                      <span class="text-muted">–</span>
-                    {% endif %}
-                  </td>
+                  <th>Übung</th>
+                  <th class="text-center">Sätze</th>
+                  <th>Letzte Einheit</th>
+                  <th>Gesamtvolumen</th>
+                  <th>Max. Gewicht</th>
+                  <th>Beste 1RM (Epley)</th>
+                  <th>Ø Volumen ({{ exercise_overview[0].moving_window }}er Ø)</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for item in exercise_overview %}
+                  {% set summary = item.summary %}
+                  {% set personal_bests = item.personal_bests %}
+                  <tr>
+                    <td>
+                      <strong>{{ item.exercise.name }}</strong>
+                      {% if item.exercise.description %}
+                        <div class="small text-muted">{{ item.exercise.description }}</div>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">{{ summary.total_sessions }}</td>
+                    <td>
+                      {% if summary.latest_session %}
+                        {{ summary.latest_session.timestamp.strftime('%d.%m.%Y') }}<br>
+                        <span class="small text-muted">{{ summary.latest_session.weight }} kg × {{ summary.latest_session.repetitions }}</span>
+                      {% else %}
+                        <span class="text-muted">–</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if summary.total_sessions %}
+                        {{ summary.total_volume|round(1) }} kg
+                      {% else %}
+                        <span class="text-muted">–</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if personal_bests.max_weight %}
+                        {{ personal_bests.max_weight.value }} kg
+                        <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh</div>
+                      {% else %}
+                        <span class="text-muted">–</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if personal_bests.max_one_rm %}
+                        {{ personal_bests.max_one_rm.value|round(1) }} kg
+                        <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }}</div>
+                      {% else %}
+                        <span class="text-muted">–</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if summary.total_sessions %}
+                        {{ summary.recent_volume_average|round(1) }} kg
+                      {% else %}
+                        <span class="text-muted">–</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </details>
       <h3>Übungen</h3>
       <ul class="list-group">
         {% for item in exercise_overview %}
