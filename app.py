@@ -24,10 +24,13 @@ import json
 import csv
 import zipfile
 from pathlib import Path
+import os
+
+from sqlalchemy import inspect
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fitness.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('GEWICHTS_TRACKER_DATABASE_URI', 'sqlite:///fitness.db')
 
 # reCAPTCHA-Konfiguration (ersetze die Schlüssel durch deine echten Werte)
 app.config['RECAPTCHA_PUBLIC_KEY'] = 'dein_recaptcha_public_key'
@@ -59,9 +62,19 @@ def _resolve_sqlite_path(database_uri: str) -> str | None:
 
 
 def _run_startup_migrations() -> None:
-    """Ensure the database schema contains the latest columns."""
+    """Ensure the database schema contains the latest tables and columns."""
 
     from migrate_add_session_notes_rpe import migrate as migrate_session_notes
+
+    with app.app_context():
+        try:
+            inspector = inspect(db.engine)
+            existing_tables = set(inspector.get_table_names())
+            defined_tables = set(db.metadata.tables.keys())
+            if defined_tables - existing_tables:
+                db.create_all()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            app.logger.warning('Failed to ensure database tables: %s', exc)
 
     db_path = _resolve_sqlite_path(app.config.get('SQLALCHEMY_DATABASE_URI', ''))
     if not db_path:
@@ -73,7 +86,15 @@ def _run_startup_migrations() -> None:
         app.logger.warning('Failed to run exercise session migration: %s', exc)
 
 
-_run_startup_migrations()
+def _ensure_startup_migrations_once() -> None:
+    """Run startup migrations once per application lifecycle."""
+
+    if getattr(app, '_startup_migrations_ran', False):
+        return
+
+    _run_startup_migrations()
+    app._startup_migrations_ran = True
+
 
 # Flask-Login konfigurieren
 login_manager = LoginManager()
@@ -1299,6 +1320,26 @@ def export_training_data():
     response = Response(csv_bytes, mimetype='text/csv; charset=utf-8')
     response.headers['Content-Disposition'] = 'attachment; filename=training-data.csv'
     return response
+
+_ensure_startup_migrations_once()
+
+
+if hasattr(app, 'before_first_request'):
+
+    @app.before_first_request
+    def _ensure_tables_before_first_request() -> None:
+        """Run startup migrations before handling the first request."""
+
+        _ensure_startup_migrations_once()
+
+else:
+
+    @app.before_request
+    def _ensure_tables_before_request() -> None:
+        """Run startup migrations before handling the first request."""
+
+        _ensure_startup_migrations_once()
+
 
 # Anwendung starten
 # ----------------------------------------------------
