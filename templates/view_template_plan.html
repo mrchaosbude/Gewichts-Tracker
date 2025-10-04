@@ -1,29 +1,24 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Vorlage: {{ template_plan.title }}</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>{{ template_plan.title }}</h2>
-      <p>{{ template_plan.description }}</p>
-      <h4>Enthaltene Übungen</h4>
-      <ul class="list-group mb-4">
-        {% for exercise in template_plan.exercises %}
-          <li class="list-group-item">
-            <strong>{{ exercise.name }}</strong>
-            {% if exercise.description %}
-              <p class="mb-0 small text-muted">{{ exercise.description }}</p>
-            {% endif %}
-          </li>
-        {% else %}
-          <li class="list-group-item">Keine Übungen vorhanden.</li>
-        {% endfor %}
-      </ul>
-      <a href="{{ url_for('template_plans') }}" class="btn btn-secondary btn-block">Zurück zu Vorlagen</a>
-    </div>
-  </body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Vorlage: {{ template_plan.title }}{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-3">{{ template_plan.title }}</h2>
+    <p>{{ template_plan.description }}</p>
+    <h4>Enthaltene Übungen</h4>
+    <ul class="list-group mb-4">
+      {% for exercise in template_plan.exercises %}
+        <li class="list-group-item">
+          <strong>{{ exercise.name }}</strong>
+          {% if exercise.description %}
+            <p class="mb-0 small text-muted">{{ exercise.description }}</p>
+          {% endif %}
+        </li>
+      {% else %}
+        <li class="list-group-item">Keine Übungen vorhanden.</li>
+      {% endfor %}
+    </ul>
+    <a href="{{ url_for('template_plans') }}" class="btn btn-secondary btn-block">Zurück zu Vorlagen</a>
+  </div>
+{% endblock %}

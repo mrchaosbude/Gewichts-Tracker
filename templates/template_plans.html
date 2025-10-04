@@ -1,24 +1,20 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Vorlagen</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Verfügbare Template Trainingspläne</h2>
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Titel</th>
-            <th>Beschreibung</th>
-            <th>Aktion</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tpl in templates %}
+{% extends "base.html" %}
+
+{% block title %}Vorlagen{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-4">Verfügbare Template Trainingspläne</h2>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Titel</th>
+          <th>Beschreibung</th>
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tpl in templates %}
           <tr>
             <td>{{ tpl.title }}</td>
             <td>{{ tpl.description }}</td>
@@ -29,10 +25,9 @@
               </form>
             </td>
           </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
-    </div>
-  </body>
-</html>
+        {% endfor %}
+      </tbody>
+    </table>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+  </div>
+{% endblock %}

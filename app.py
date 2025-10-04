@@ -125,6 +125,14 @@ class FooterPage(db.Model):
     content = db.Column(db.Text, nullable=False)
 
 
+@app.context_processor
+def inject_footer_pages():
+    """Provide footer pages to all templates."""
+
+    _ensure_database_setup_once()
+    return {"footer_pages": FooterPage.query.all()}
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
