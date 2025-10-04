@@ -1,38 +1,31 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Vorlagen</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Verfügbare Template Trainingspläne</h2>
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Titel</th>
-            <th>Beschreibung</th>
-            <th>Aktion</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tpl in templates %}
-          <tr>
-            <td>{{ tpl.title }}</td>
-            <td>{{ tpl.description }}</td>
-            <td>
-              <a href="{{ url_for('view_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Ansehen</a>
-              <form action="{{ url_for('add_template_to_account', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Diese Vorlage zu deinem Konto hinzufügen?');">
-                <button type="submit" class="btn btn-success btn-sm">Hinzufügen</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
-    </div>
-  </body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Vorlagen{% endblock %}
+
+{% block content %}
+  <h2>Verfügbare Template Trainingspläne</h2>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Titel</th>
+        <th>Beschreibung</th>
+        <th>Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tpl in templates %}
+        <tr>
+          <td>{{ tpl.title }}</td>
+          <td>{{ tpl.description }}</td>
+          <td>
+            <a href="{{ url_for('view_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Ansehen</a>
+            <form action="{{ url_for('add_template_to_account', template_plan_id=tpl.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Diese Vorlage zu deinem Konto hinzufügen?');">
+              <button type="submit" class="btn btn-success btn-sm">Hinzufügen</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+{% endblock %}

@@ -1,244 +1,250 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Details für {{ exercise.name }}</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-      #chartContainer { margin: auto; height: 250px; }
-      @media (min-width: 768px) { #chartContainer { height: 400px; } }
-    </style>
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2 class="text-center">Verlauf für "{{ exercise.name }}"</h2>
-      {% if exercise.description %}
-        <p class="text-center text-muted">{{ exercise.description }}</p>
-      {% endif %}
-      {% if summary_metrics.total_sessions %}
-        <div class="row text-center mb-4">
-          <div class="col-sm-6 col-lg-3 mb-3">
-            <div class="card shadow-sm h-100">
-              <div class="card-body">
-                <h6 class="text-uppercase text-muted">Gesamtvolumen</h6>
-                <h4 class="mb-1">{{ summary_metrics.total_volume|round(1) }} kg</h4>
-                <div class="small text-muted">{{ summary_metrics.total_sessions }} Sätze insgesamt</div>
-                <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_volume_average|round(1) }} kg</div>
-                <div class="small text-muted">Bester Satz: {{ personal_bests.max_volume.value }} kg am {{ personal_bests.max_volume.timestamp.strftime('%d.%m.%Y') }}</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-lg-3 mb-3">
-            <div class="card shadow-sm h-100">
-              <div class="card-body">
-                <h6 class="text-uppercase text-muted">Letzte Einheit</h6>
-                <h5 class="mb-1">{{ summary_metrics.latest_session.weight }} kg × {{ summary_metrics.latest_session.repetitions }}</h5>
-                <div class="small text-muted">{{ summary_metrics.latest_session.timestamp.strftime('%d.%m.%Y %H:%M') }}</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-lg-3 mb-3">
-            <div class="card shadow-sm h-100">
-              <div class="card-body">
-                <h6 class="text-uppercase text-muted">Max. Gewicht</h6>
-                <h4 class="mb-1">{{ personal_bests.max_weight.value }} kg</h4>
-                <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh · {{ personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }}</div>
-                <div class="small text-muted">Volumen: {{ personal_bests.max_volume.value }} kg</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-lg-3 mb-3">
-            <div class="card shadow-sm h-100">
-              <div class="card-body">
-                <h6 class="text-uppercase text-muted">Beste 1RM (Epley)</h6>
-                <h4 class="mb-1">{{ personal_bests.max_one_rm.value|round(1) }} kg</h4>
-                <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }} Wdh</div>
-                <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_one_rm_average|round(1) }} kg</div>
-              </div>
-            </div>
+{% extends "base.html" %}
+
+{% block title %}Details für {{ exercise.name }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    #chartContainer {
+      margin: auto;
+      height: 250px;
+    }
+
+    @media (min-width: 768px) {
+      #chartContainer {
+        height: 400px;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h2 class="text-center">Verlauf für "{{ exercise.name }}"</h2>
+  {% if exercise.description %}
+    <p class="text-center text-muted">{{ exercise.description }}</p>
+  {% endif %}
+  {% if summary_metrics.total_sessions %}
+    <div class="row text-center mb-4">
+      <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="text-uppercase text-muted">Gesamtvolumen</h6>
+            <h4 class="mb-1">{{ summary_metrics.total_volume|round(1) }} kg</h4>
+            <div class="small text-muted">{{ summary_metrics.total_sessions }} Sätze insgesamt</div>
+            <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_volume_average|round(1) }} kg</div>
+            <div class="small text-muted">Bester Satz: {{ personal_bests.max_volume.value }} kg am {{ personal_bests.max_volume.timestamp.strftime('%d.%m.%Y') }}</div>
           </div>
         </div>
-      {% else %}
-        <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
-      {% endif %}
-      <div id="chartContainer" class="mb-4">
-        <canvas id="progressChart"></canvas>
       </div>
-      <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block mb-2">Neuen Satz hinzufügen</a>
-      <h3>Letzte 15 Sätze</h3>
-      <ul class="list-group">
-        {% for session in sessions %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-              <div>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</div>
-              {% if session.perceived_exertion is not none or session.notes %}
-                <div class="mt-1 small text-muted">
-                  {% if session.perceived_exertion is not none %}
-                    <div>RPE: {{ session.perceived_exertion }}</div>
-                  {% endif %}
-                  {% if session.notes %}
-                    <div>Notizen: {{ session.notes.replace('\n', '<br>')|safe }}</div>
-                  {% endif %}
-                </div>
+      <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="text-uppercase text-muted">Letzte Einheit</h6>
+            <h5 class="mb-1">{{ summary_metrics.latest_session.weight }} kg × {{ summary_metrics.latest_session.repetitions }}</h5>
+            <div class="small text-muted">{{ summary_metrics.latest_session.timestamp.strftime('%d.%m.%Y %H:%M') }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="text-uppercase text-muted">Max. Gewicht</h6>
+            <h4 class="mb-1">{{ personal_bests.max_weight.value }} kg</h4>
+            <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh · {{ personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }}</div>
+            <div class="small text-muted">Volumen: {{ personal_bests.max_volume.value }} kg</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="text-uppercase text-muted">Beste 1RM (Epley)</h6>
+            <h4 class="mb-1">{{ personal_bests.max_one_rm.value|round(1) }} kg</h4>
+            <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }} Wdh</div>
+            <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_one_rm_average|round(1) }} kg</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
+  {% endif %}
+  <div id="chartContainer" class="mb-4">
+    <canvas id="progressChart"></canvas>
+  </div>
+  <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block mb-2">Neuen Satz hinzufügen</a>
+  <h3>Letzte 15 Sätze</h3>
+  <ul class="list-group">
+    {% for session in sessions %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          <div>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</div>
+          {% if session.perceived_exertion is not none or session.notes %}
+            <div class="mt-1 small text-muted">
+              {% if session.perceived_exertion is not none %}
+                <div>RPE: {{ session.perceived_exertion }}</div>
+              {% endif %}
+              {% if session.notes %}
+                <div>Notizen: {{ session.notes.replace('\n', '<br>')|safe }}</div>
               {% endif %}
             </div>
-            <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');">
-              {{ delete_session_form.hidden_tag() }}
-              {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×") }}
-            </form>
-          </li>
-        {% endfor %}
-      </ul>
-      <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
-        {{ delete_exercise_form.hidden_tag() }}
-        {% if editable %}
-          <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
-        {% else %}
-          <div class="alert alert-warning">Diese Übung kann nicht bearbeitet werden.</div>
-        {% endif %}
-        {{ delete_exercise_form.submit(class="btn btn-danger btn-block", value='Übung löschen') }}
-      </form>
-      <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
-    </div>
-    <script>
-      const chartData = {{ chart_data|tojson }};
-      const movingWindow = {{ moving_window }};
-      const labels = chartData.labels;
-      const notes = chartData.notes;
-      const perceivedExertion = chartData.perceived_exertion;
-      const ctx = document.getElementById('progressChart').getContext('2d');
-      const progressChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Gewicht (kg)',
-              data: chartData.weights,
-              borderColor: 'rgba(75, 192, 192, 1)',
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              fill: false,
-              tension: 0.1,
-              yAxisID: 'yWeight'
-            },
-            {
-              label: 'Wiederholungen',
-              data: chartData.repetitions,
-              borderColor: 'rgba(153, 102, 255, 1)',
-              backgroundColor: 'rgba(153, 102, 255, 0.2)',
-              fill: false,
-              tension: 0.1,
-              yAxisID: 'yReps'
-            },
-            {
-              label: 'Volumen (kg)',
-              data: chartData.volume,
-              borderColor: 'rgba(255, 99, 132, 1)',
-              backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              fill: false,
-              tension: 0.1,
-              yAxisID: 'yVolume'
-            },
-            {
-              label: `Volumen gleitender Ø (${movingWindow})`,
-              data: chartData.moving_avg_volume,
-              borderColor: 'rgba(194, 24, 91, 1)',
-              backgroundColor: 'rgba(194, 24, 91, 0.15)',
-              borderDash: [6, 4],
-              fill: false,
-              tension: 0.2,
-              yAxisID: 'yVolume'
-            },
-            {
-              label: '1RM (Epley)',
-              data: chartData.one_rm,
-              borderColor: 'rgba(255, 159, 64, 1)',
-              backgroundColor: 'rgba(255, 159, 64, 0.2)',
-              fill: false,
-              tension: 0.1,
-              yAxisID: 'yWeight'
-            },
-            {
-              label: `1RM gleitender Ø (${movingWindow})`,
-              data: chartData.moving_avg_one_rm,
-              borderColor: 'rgba(255, 205, 86, 1)',
-              backgroundColor: 'rgba(255, 205, 86, 0.15)',
-              borderDash: [4, 4],
-              fill: false,
-              tension: 0.2,
-              yAxisID: 'yWeight'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                afterBody: function(context) {
-                  const index = context[0].dataIndex;
-                  const details = [];
-                  const volume = chartData.volume[index];
-                  const oneRm = chartData.one_rm[index];
-                  if (volume !== undefined) {
-                    details.push('Volumen: ' + volume + ' kg');
-                  }
-                  if (oneRm !== undefined) {
-                    details.push('1RM (Epley): ' + oneRm.toFixed(1) + ' kg');
-                  }
-                  const rpeValue = perceivedExertion[index];
-                  const noteValue = notes[index];
-                  if (rpeValue !== null && rpeValue !== undefined) {
-                    details.push('RPE: ' + rpeValue);
-                  }
-                  if (noteValue) {
-                    details.push('Notizen: ' + noteValue);
-                  }
-                  return details;
+          {% endif %}
+        </div>
+        <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');">
+          {{ delete_session_form.hidden_tag() }}
+          {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×") }}
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+  <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
+    {{ delete_exercise_form.hidden_tag() }}
+    {% if editable %}
+      <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
+    {% else %}
+      <div class="alert alert-warning">Diese Übung kann nicht bearbeitet werden.</div>
+    {% endif %}
+    {{ delete_exercise_form.submit(class="btn btn-danger btn-block", value='Übung löschen') }}
+  </form>
+  <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const chartData = {{ chart_data|tojson }};
+    const movingWindow = {{ moving_window }};
+    const labels = chartData.labels;
+    const notes = chartData.notes;
+    const perceivedExertion = chartData.perceived_exertion;
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    const progressChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Gewicht (kg)',
+            data: chartData.weights,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            fill: false,
+            tension: 0.1,
+            yAxisID: 'yWeight'
+          },
+          {
+            label: 'Wiederholungen',
+            data: chartData.repetitions,
+            borderColor: 'rgba(153, 102, 255, 1)',
+            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+            fill: false,
+            tension: 0.1,
+            yAxisID: 'yReps'
+          },
+          {
+            label: 'Volumen (kg)',
+            data: chartData.volume,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            fill: false,
+            tension: 0.1,
+            yAxisID: 'yVolume'
+          },
+          {
+            label: `Volumen gleitender Ø (${movingWindow})`,
+            data: chartData.moving_avg_volume,
+            borderColor: 'rgba(194, 24, 91, 1)',
+            backgroundColor: 'rgba(194, 24, 91, 0.15)',
+            borderDash: [6, 4],
+            fill: false,
+            tension: 0.2,
+            yAxisID: 'yVolume'
+          },
+          {
+            label: '1RM (Epley)',
+            data: chartData.one_rm,
+            borderColor: 'rgba(255, 159, 64, 1)',
+            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+            fill: false,
+            tension: 0.1,
+            yAxisID: 'yWeight'
+          },
+          {
+            label: `1RM gleitender Ø (${movingWindow})`,
+            data: chartData.moving_avg_one_rm,
+            borderColor: 'rgba(255, 205, 86, 1)',
+            backgroundColor: 'rgba(255, 205, 86, 0.15)',
+            borderDash: [4, 4],
+            fill: false,
+            tension: 0.2,
+            yAxisID: 'yWeight'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              afterBody: function (context) {
+                const index = context[0].dataIndex;
+                const details = [];
+                const volume = chartData.volume[index];
+                const oneRm = chartData.one_rm[index];
+                if (volume !== undefined) {
+                  details.push('Volumen: ' + volume + ' kg');
                 }
+                if (oneRm !== undefined) {
+                  details.push('1RM (Epley): ' + oneRm.toFixed(1) + ' kg');
+                }
+                const rpeValue = perceivedExertion[index];
+                const noteValue = notes[index];
+                if (rpeValue !== null && rpeValue !== undefined) {
+                  details.push('RPE: ' + rpeValue);
+                }
+                if (noteValue) {
+                  details.push('Notizen: ' + noteValue);
+                }
+                return details;
               }
             }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Datum und Uhrzeit' }
           },
-          scales: {
-            x: {
-              title: { display: true, text: 'Datum und Uhrzeit' }
-            },
-            yWeight: {
-              type: 'linear',
-              position: 'left',
-              title: { display: true, text: 'Gewicht / 1RM (kg)' },
-              beginAtZero: true
-            },
-            yVolume: {
-              type: 'linear',
-              position: 'right',
-              title: { display: true, text: 'Volumen (kg)' },
-              beginAtZero: true,
-              grid: { drawOnChartArea: false }
-            },
-            yReps: {
-              type: 'linear',
-              position: 'right',
-              display: false,
-              beginAtZero: true
-            }
+          yWeight: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Gewicht / 1RM (kg)' },
+            beginAtZero: true
+          },
+          yVolume: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Volumen (kg)' },
+            beginAtZero: true,
+            grid: { drawOnChartArea: false }
+          },
+          yReps: {
+            type: 'linear',
+            position: 'right',
+            display: false,
+            beginAtZero: true
           }
         }
-      });
-      </script>
-      <script>
-        // Stelle sicher, dass der Zurück-Button zum Trainingsplan führt
-        history.replaceState({from: 'plan'}, "", "{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
-        history.pushState({from: 'exercise'}, "", location.pathname + location.search);
-        window.addEventListener('popstate', function(e) {
-          if (location.pathname.startsWith('/exercise/') && e.state && e.state.from === 'exercise') {
-            location.replace("{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
-          }
-        });
-      </script>
-  </body>
-</html>
+      }
+    });
+  </script>
+  <script>
+    history.replaceState({ from: 'plan' }, "", "{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
+    history.pushState({ from: 'exercise' }, "", location.pathname + location.search);
+    window.addEventListener('popstate', function (e) {
+      if (location.pathname.startsWith('/exercise/') && e.state && e.state.from === 'exercise') {
+        location.replace("{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
+      }
+    });
+  </script>
+{% endblock %}

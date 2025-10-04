@@ -1,53 +1,46 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Admin – Template Trainingspläne</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Admin – Template Trainingspläne</h2>
-      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success mb-3 btn-block">
-        Neuen Template Trainingsplan erstellen
-      </a>
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Titel</th>
-            <th>Beschreibung</th>
-            <th>Sichtbar</th>
-            <th>Aktionen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tpl in templates %}
-          <tr>
-            <td>{{ tpl.title }}</td>
-            <td>{{ tpl.description }}</td>
-            <td>{{ 'Ja' if tpl.is_visible else 'Nein' }}</td>
-            <td>
-              <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-primary btn-sm">Übung hinzufügen</a>
-              <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
-              <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" style="display:inline;">
-                {{ toggle_form.hidden_tag() }}
-                {% if tpl.is_visible %}
+{% extends "base.html" %}
+
+{% block title %}Admin – Template Trainingspläne{% endblock %}
+
+{% block content %}
+  <h2>Admin – Template Trainingspläne</h2>
+  <a href="{{ url_for('create_template_plan') }}" class="btn btn-success mb-3 btn-block">
+    Neuen Template Trainingsplan erstellen
+  </a>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Titel</th>
+        <th>Beschreibung</th>
+        <th>Sichtbar</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tpl in templates %}
+        <tr>
+          <td>{{ tpl.title }}</td>
+          <td>{{ tpl.description }}</td>
+          <td>{{ 'Ja' if tpl.is_visible else 'Nein' }}</td>
+          <td>
+            <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-primary btn-sm">Übung hinzufügen</a>
+            <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
+            <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" class="d-inline">
+              {{ toggle_form.hidden_tag() }}
+              {% if tpl.is_visible %}
                 {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Unsichtbar') }}
-                {% else %}
+              {% else %}
                 {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Sichtbar') }}
-                {% endif %}
-              </form>
-              <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Template Trainingsplan wirklich löschen?');">
-                {{ delete_tpl_form.hidden_tag() }}
-                {{ delete_tpl_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
-    </div>
-  </body>
-</html>
+              {% endif %}
+            </form>
+            <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Template Trainingsplan wirklich löschen?');">
+              {{ delete_tpl_form.hidden_tag() }}
+              {{ delete_tpl_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+{% endblock %}

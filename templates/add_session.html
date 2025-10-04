@@ -1,193 +1,193 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Session hinzufügen für {{ exercise.name }}</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Session hinzufügen für "{{ exercise.name }}"</h2>
-      <form method="POST">
-        {{ form.hidden_tag() }}
-        <div class="form-group">
-          {{ form.repetitions.label }} {{ form.repetitions(class="form-control", pattern="\d*") }}
-        </div>
-        <div class="form-group">
-          {{ form.weight.label }} {{ form.weight(class="form-control", pattern="\d*") }}
-        </div>
-        <div class="form-group">
-          {{ form.perceived_exertion.label }} {{ form.perceived_exertion(class="form-control", pattern="\d*") }}
-        </div>
-        <div class="form-group">
-          {{ form.notes.label }} {{ form.notes(class="form-control") }}
-        </div>
-        <div class="form-group">
-          {{ form.submit(class="btn btn-primary btn-block") }}
-        </div>
-      </form>
-      <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-secondary btn-block">Zurück</a>
+{% extends "base.html" %}
 
-      <div class="mt-4">
-        <label for="restTime">Pause (Sekunden)</label>
-        <div class="input-group">
-          <input type="number" id="restTime" class="form-control" value="60" min="1">
-          <div class="input-group-append">
-            <button id="startRest" type="button" class="btn btn-info">Pause starten</button>
-          </div>
-        </div>
-      <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
+{% block title %}Session hinzufügen für {{ exercise.name }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .rest-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1050;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h2>Session hinzufügen für "{{ exercise.name }}"</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+      {{ form.repetitions.label }} {{ form.repetitions(class="form-control", pattern="\d*") }}
+    </div>
+    <div class="form-group">
+      {{ form.weight.label }} {{ form.weight(class="form-control", pattern="\d*") }}
+    </div>
+    <div class="form-group">
+      {{ form.perceived_exertion.label }} {{ form.perceived_exertion(class="form-control", pattern="\d*") }}
+    </div>
+    <div class="form-group">
+      {{ form.notes.label }} {{ form.notes(class="form-control") }}
+    </div>
+    <div class="form-group">
+      {{ form.submit(class="btn btn-primary btn-block") }}
+    </div>
+  </form>
+  <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-secondary btn-block">Zurück</a>
+
+  <div class="mt-4">
+    <label for="restTime">Pause (Sekunden)</label>
+    <div class="input-group">
+      <input type="number" id="restTime" class="form-control" value="60" min="1">
+      <div class="input-group-append">
+        <button id="startRest" type="button" class="btn btn-info">Pause starten</button>
       </div>
-    <!-- Vollbild Pausen-Overlay -->
-    <div id="restOverlay" class="rest-overlay d-none">
-      <svg width="200" height="200" class="mb-3">
-        <circle cx="100" cy="100" r="90" stroke="#555" stroke-width="10" fill="none"/>
-        <circle id="progressCircle" cx="100" cy="100" r="90" stroke="#0d6efd" stroke-width="10" fill="none" stroke-dasharray="565" stroke-dashoffset="0" style="transform: rotate(-90deg); transform-origin: center;"/>
-        <text id="timerText" x="100" y="110" text-anchor="middle" font-size="2em" fill="white">00:00</text>
-      </svg>
-      <div class="text-center">Pause ...</div>
     </div>
-    </div>
-      <script src="/static/js/main.js"></script>
-      <script>
-        const restInput = document.getElementById('restTime');
-        const savedRest = localStorage.getItem('lastRestTime');
-        if (savedRest) {
-          restInput.value = savedRest;
-        }
+    <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
+  </div>
 
-        document.querySelector('form').addEventListener('submit', function(e) {
-        if (!navigator.onLine) {
-          e.preventDefault();
-          const rpeValue = document.getElementById('perceived_exertion').value;
-          const parsedRpe = rpeValue ? parseInt(rpeValue, 10) : null;
-          const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
-          saveOfflineSession({
-            exercise_id: {{ exercise.id }},
-            repetitions: document.getElementById('repetitions').value,
-            weight: document.getElementById('weight').value,
-            perceived_exertion: normalizedRpe,
-            notes: document.getElementById('notes').value || null,
-            timestamp: new Date().toISOString()
-          });
-          alert('Offline: Session wird gespeichert und beim n\u00e4chsten Online-Sein synchronisiert.');
-          window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
-        }
-      });
+  <div id="restOverlay" class="rest-overlay d-none">
+    <svg width="200" height="200" class="mb-3">
+      <circle cx="100" cy="100" r="90" stroke="#555" stroke-width="10" fill="none"></circle>
+      <circle id="progressCircle" cx="100" cy="100" r="90" stroke="#0d6efd" stroke-width="10" fill="none" stroke-dasharray="565" stroke-dashoffset="0" style="transform: rotate(-90deg); transform-origin: center;"></circle>
+      <text id="timerText" x="100" y="110" text-anchor="middle" font-size="2em" fill="white">00:00</text>
+    </svg>
+    <div class="text-center">Pause ...</div>
+  </div>
+{% endblock %}
 
-        function formatTime(sec) {
-        const m = Math.floor(sec / 60).toString().padStart(2, '0');
-        const s = (sec % 60).toString().padStart(2, '0');
-        return m + ':' + s;
+{% block extra_scripts %}
+  <script>
+    const restInput = document.getElementById('restTime');
+    const savedRest = localStorage.getItem('lastRestTime');
+    if (savedRest) {
+      restInput.value = savedRest;
+    }
+
+    document.querySelector('form').addEventListener('submit', function (e) {
+      if (!navigator.onLine) {
+        e.preventDefault();
+        const rpeValue = document.getElementById('perceived_exertion').value;
+        const parsedRpe = rpeValue ? parseInt(rpeValue, 10) : null;
+        const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
+        saveOfflineSession({
+          exercise_id: {{ exercise.id }},
+          repetitions: document.getElementById('repetitions').value,
+          weight: document.getElementById('weight').value,
+          perceived_exertion: normalizedRpe,
+          notes: document.getElementById('notes').value || null,
+          timestamp: new Date().toISOString()
+        });
+        alert('Offline: Session wird gespeichert und beim nächsten Online-Sein synchronisiert.');
+        window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+      }
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return m + ':' + s;
+    }
+
+    const overlay = document.getElementById('restOverlay');
+    const progressCircle = document.getElementById('progressCircle');
+    const timerText = document.getElementById('timerText');
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.error('Wake Lock error:', err);
+        }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
+    document.getElementById('startRest').addEventListener('click', function () {
+      const input = document.getElementById('restTime');
+      let remaining = parseInt(input.value, 10) || 0;
+      if (remaining <= 0) {
+        return;
+      }
+      const reps = document.getElementById('repetitions').value;
+      const weight = document.getElementById('weight').value;
+      const notes = document.getElementById('notes').value;
+      const rpeRaw = document.getElementById('perceived_exertion').value;
+      const parsedRpe = rpeRaw ? parseInt(rpeRaw, 10) : null;
+      const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
+      if (!reps || !weight) {
+        alert('Bitte Wiederholungen und Gewicht eingeben.');
+        return;
+      }
+      localStorage.setItem('lastRestTime', remaining);
+
+      const sessionData = {
+        repetitions: reps,
+        weight: weight,
+        notes: notes || null,
+        perceived_exertion: normalizedRpe
+      };
+
+      function startCountdown() {
+        document.getElementById('startRest').disabled = true;
+        input.disabled = true;
+        overlay.classList.remove('d-none');
+        const total = remaining;
+        const circumference = 565;
+        progressCircle.style.strokeDasharray = circumference;
+        function updateDisplay(sec) {
+          timerText.textContent = formatTime(sec);
+          progressCircle.style.strokeDashoffset = circumference * (1 - sec / total);
+        }
+        const endTime = Date.now() + remaining * 1000;
+        updateDisplay(remaining);
+        requestWakeLock();
+        const interval = setInterval(() => {
+          remaining = Math.ceil((endTime - Date.now()) / 1000);
+          updateDisplay(Math.max(remaining, 0));
+          if (remaining <= 0) {
+            clearInterval(interval);
+            releaseWakeLock();
+            window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
+          }
+        }, 1000);
       }
 
-        const overlay = document.getElementById('restOverlay');
-        const progressCircle = document.getElementById('progressCircle');
-        const timerText = document.getElementById('timerText');
-        let wakeLock = null;
-
-        async function requestWakeLock() {
-          if ('wakeLock' in navigator) {
-            try {
-              wakeLock = await navigator.wakeLock.request('screen');
-            } catch (err) {
-              console.error('Wake Lock error:', err);
-            }
-          }
-        }
-
-        function releaseWakeLock() {
-          if (wakeLock) {
-            wakeLock.release();
-            wakeLock = null;
-          }
-        }
-
-        document.getElementById('startRest').addEventListener('click', function() {
-        const input = document.getElementById('restTime');
-        let remaining = parseInt(input.value, 10) || 0;
-        if (remaining <= 0) { return; }
-        const reps = document.getElementById('repetitions').value;
-        const weight = document.getElementById('weight').value;
-        const notes = document.getElementById('notes').value;
-        const rpeRaw = document.getElementById('perceived_exertion').value;
-        const parsedRpe = rpeRaw ? parseInt(rpeRaw, 10) : null;
-        const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
-        if (!reps || !weight) {
-          alert('Bitte Wiederholungen und Gewicht eingeben.');
-          return;
-        }
-        localStorage.setItem('lastRestTime', remaining);
-
-        const sessionData = {
+      if (navigator.onLine) {
+        fetch('/api/exercises/{{ exercise.id }}/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sessionData)
+        }).then(startCountdown).catch(function () {
+          alert('Fehler beim Speichern der Session.');
+        });
+      } else {
+        saveOfflineSession({
+          exercise_id: {{ exercise.id }},
           repetitions: reps,
           weight: weight,
           notes: notes || null,
-          perceived_exertion: normalizedRpe
-        };
-
-        function startCountdown() {
-          document.getElementById('startRest').disabled = true;
-          input.disabled = true;
-          overlay.classList.remove('d-none');
-          const total = remaining;
-          const circumference = 565;
-          progressCircle.style.strokeDasharray = circumference;
-          function updateDisplay(sec) {
-            timerText.textContent = formatTime(sec);
-            progressCircle.style.strokeDashoffset = circumference * (1 - sec / total);
-          }
-          const endTime = Date.now() + remaining * 1000;
-          updateDisplay(remaining);
-          requestWakeLock();
-          const interval = setInterval(() => {
-            remaining = Math.ceil((endTime - Date.now()) / 1000);
-            updateDisplay(Math.max(remaining, 0));
-            if (remaining <= 0) {
-              clearInterval(interval);
-              releaseWakeLock();
-              window.location.href = "{{ url_for('exercise_detail', exercise_id=exercise.id) }}";
-            }
-          }, 1000);
-        }
-
-        if (navigator.onLine) {
-          fetch('/api/exercises/{{ exercise.id }}/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(sessionData)
-          }).then(startCountdown).catch(function() {
-            alert('Fehler beim Speichern der Session.');
-          });
-        } else {
-          saveOfflineSession({
-            exercise_id: {{ exercise.id }},
-            repetitions: reps,
-            weight: weight,
-            notes: notes || null,
-            perceived_exertion: normalizedRpe,
-            timestamp: new Date().toISOString()
-          });
-          startCountdown();
-        }
+          perceived_exertion: normalizedRpe,
+          timestamp: new Date().toISOString()
         });
-    </script>
-    <style>
-      .rest-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.85);
-        color: #fff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 1050;
+        startCountdown();
       }
-    </style>
-  </body>
-</html>
+    });
+  </script>
+{% endblock %}

@@ -1,54 +1,46 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Admin – Footer-Seiten</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Footer-Seiten verwalten</h2>
-      <form method="POST" class="mb-3">
-        {{ form.hidden_tag() }}
-        <div class="form-row">
-          <div class="col">
-            {{ form.title.label }} {{ form.title(class="form-control") }}
-          </div>
-          <div class="col">
-            {{ form.content.label }} {{ form.content(class="form-control", rows=4) }}
-          </div>
-          <div class="col-auto">
-            {{ form.submit(class="btn btn-primary mt-4") }}
-          </div>
-        </div>
-      </form>
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Text</th>
-            <th>Vorschau</th>
-            <th>Aktionen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for page in pages %}
-          <tr>
-            <td>{{ page.title }}</td>
-            <td>{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
-            <td>
-              <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
-              <form action="{{ url_for('delete_footer_page', page_id=page.id) }}" method="POST" style="display:inline;">
-                {{ delete_form.hidden_tag() }}
-                {{ delete_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <a href="{{ url_for('admin_overview') }}" class="btn btn-secondary btn-block">Zurück</a>
-    </div>
-  </body>
-</html>
+{% extends "base.html" %}
 
+{% block title %}Admin – Footer-Seiten{% endblock %}
+
+{% block content %}
+  <h2>Footer-Seiten verwalten</h2>
+  <form method="POST" class="mb-3">
+    {{ form.hidden_tag() }}
+    <div class="form-row">
+      <div class="col">
+        {{ form.title.label }} {{ form.title(class="form-control") }}
+      </div>
+      <div class="col">
+        {{ form.content.label }} {{ form.content(class="form-control", rows=4) }}
+      </div>
+      <div class="col-auto">
+        {{ form.submit(class="btn btn-primary mt-4") }}
+      </div>
+    </div>
+  </form>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Text</th>
+        <th>Vorschau</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for page in pages %}
+        <tr>
+          <td>{{ page.title }}</td>
+          <td>{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
+          <td>
+            <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
+            <form action="{{ url_for('delete_footer_page', page_id=page.id) }}" method="POST" class="d-inline">
+              {{ delete_form.hidden_tag() }}
+              {{ delete_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <a href="{{ url_for('admin_overview') }}" class="btn btn-secondary btn-block">Zurück</a>
+{% endblock %}
