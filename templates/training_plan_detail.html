@@ -74,7 +74,7 @@
     <p>{{ training_plan.description }}</p>
     <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success mb-3 btn-block">Übung hinzufügen</a>
     {% if exercise_overview %}
-      <details id="exerciseStatsToggle" class="exercise-stats-toggle" open>
+      <details id="exerciseStatsToggle" class="exercise-stats-toggle">
         <summary>Übungsstatistiken</summary>
         <div class="exercise-stats-body">
           <div class="table-responsive mb-4">
