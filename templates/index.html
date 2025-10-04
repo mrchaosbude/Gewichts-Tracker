@@ -1,31 +1,32 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Fitness App</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="manifest" href="/static/manifest.json">
-  </head>
-  <body>
-    <div class="container mt-4 text-center">
-      <h1>Willkommen in der Fitness App</h1>
-      <p>
-        <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
-        <a href="{{ url_for('register') }}" class="btn btn-secondary">Registrieren</a>
-      </p>
-    </div>
-    <script src="/static/js/main.js"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          }, function(err) {
-            console.log('ServiceWorker registration failed: ', err);
-          });
+{% extends "base.html" %}
+
+{% block title %}Fitness App{% endblock %}
+
+{% block extra_head %}
+  <link rel="manifest" href="/static/manifest.json">
+{% endblock %}
+
+{% block content %}
+  <div class="container text-center">
+    <h1 class="mb-4">Willkommen in der Fitness App</h1>
+    <p>
+      <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+      <a href="{{ url_for('register') }}" class="btn btn-secondary">Registrieren</a>
+    </p>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="/static/js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/static/sw.js').then(function (registration) {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, function (err) {
+          console.log('ServiceWorker registration failed: ', err);
         });
-      }
-    </script>
-  </body>
-</html>
+      });
+    }
+  </script>
+{% endblock %}

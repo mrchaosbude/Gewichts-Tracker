@@ -1,36 +1,26 @@
-<!doctype html>
-<html lang="de">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Login</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container mt-4">
-      <h2>Login</h2>
-      <form method="POST">
-        {{ form.hidden_tag() }}
-        <div class="form-group">
-          {{ form.username.label }} {{ form.username(class="form-control") }}
-        </div>
-        <div class="form-group">
-          {{ form.password.label }} {{ form.password(class="form-control") }}
-        </div>
-        <div class="form-group form-check">
-          {{ form.remember(class="form-check-input") }}
-          {{ form.remember.label(class="form-check-label") }}
-        </div>
-        <div class="form-group">
-          {{ form.submit(class="btn btn-primary btn-block") }}
-        </div>
-      </form>
-      <p>Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
-    </div>
-    <footer class="bg-light text-center py-2 fixed-bottom">
-      {% for page in footer_pages %}
-        <a href="{{ url_for('view_footer_page', page_id=page.id) }}" class="mx-2">{{ page.title }}</a>
-      {% endfor %}
-    </footer>
-  </body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-4">Login</h2>
+    <form method="POST">
+      {{ form.hidden_tag() }}
+      <div class="form-group">
+        {{ form.username.label }} {{ form.username(class="form-control") }}
+      </div>
+      <div class="form-group">
+        {{ form.password.label }} {{ form.password(class="form-control") }}
+      </div>
+      <div class="form-group form-check">
+        {{ form.remember(class="form-check-input") }}
+        {{ form.remember.label(class="form-check-label") }}
+      </div>
+      <div class="form-group">
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </div>
+    </form>
+    <p>Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
+  </div>
+{% endblock %}
