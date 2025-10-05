@@ -72,6 +72,7 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_trainer = db.Column(db.Boolean, default=False)
     training_plans = db.relationship('TrainingPlan', backref='owner', lazy=True, cascade="all, delete-orphan")
+    exercises = db.relationship('Exercise', backref='owner', lazy=True)
 
 plan_exercises = db.Table(
     'plan_exercises',
@@ -91,6 +92,7 @@ class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300), nullable=True)  # Beschreibung der Übung
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
     training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
 
@@ -102,6 +104,7 @@ class ExerciseSession(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
     notes = db.Column(db.Text)
     perceived_exertion = db.Column(db.Integer)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
 # Modelle für Template Trainingspläne
 class TemplateTrainingPlan(db.Model):
@@ -525,8 +528,9 @@ def training_plan_detail(training_plan_id):
     }
     exercise_overview = []
     for exercise in training_plan.exercises:
-        stats = calculate_exercise_statistics(exercise.sessions)
-        recent_sessions = sorted(exercise.sessions, key=lambda s: s.timestamp, reverse=True)[:3]
+        user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
+        stats = calculate_exercise_statistics(user_sessions)
+        recent_sessions = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
         exercise_overview.append({
             'exercise': exercise,
             'summary': stats['summary'],
@@ -560,9 +564,15 @@ def add_exercise_to_plan(training_plan_id):
     if form.validate_on_submit():
         selected_id = request.form.get('existing_exercise_id')
         if selected_id:
-            exercise = Exercise.query.get(int(selected_id))
+            exercise = Exercise.query.get_or_404(int(selected_id))
+            if not any(p.user_id == current_user.id for p in exercise.training_plans):
+                abort(403)
         else:
-            exercise = Exercise(name=form.name.data, description=form.description.data)
+            exercise = Exercise(
+                name=form.name.data,
+                description=form.description.data,
+                user_id=current_user.id,
+            )
             db.session.add(exercise)
             db.session.flush()
         if exercise not in training_plan.exercises:
@@ -580,7 +590,12 @@ def add_session(exercise_id):
         abort(403)
     form = ExerciseSessionForm()
     if request.method == 'GET':
-        last_session = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).first()
+        last_session = (
+            ExerciseSession.query
+            .filter_by(exercise_id=exercise_id, user_id=current_user.id)
+            .order_by(ExerciseSession.timestamp.desc())
+            .first()
+        )
         if last_session:
             form.repetitions.data = last_session.repetitions
             form.weight.data = int(last_session.weight)
@@ -594,6 +609,7 @@ def add_session(exercise_id):
             timestamp=datetime.datetime.now(),
             perceived_exertion=form.perceived_exertion.data,
             notes=form.notes.data,
+            user_id=current_user.id,
         )
         db.session.add(new_session)
         db.session.commit()
@@ -609,8 +625,12 @@ def exercise_detail(exercise_id):
         abort(403)
     user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
     editable = exercise_owned_exclusively_by(current_user.id, exercise)
-    all_sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
-    sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.desc()).limit(15).all()
+    session_query = ExerciseSession.query.filter_by(
+        exercise_id=exercise_id,
+        user_id=current_user.id,
+    )
+    all_sessions = session_query.order_by(ExerciseSession.timestamp.asc()).all()
+    sessions = session_query.order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
     stats = calculate_exercise_statistics(all_sessions)
 
@@ -695,6 +715,8 @@ def delete_exercise(exercise_id):
 @login_required
 def delete_session(session_id):
     session = ExerciseSession.query.get_or_404(session_id)
+    if session.user_id != current_user.id:
+        abort(403)
     if not any(p.user_id == current_user.id for p in session.exercise.training_plans):
         abort(403)
     exercise_id = session.exercise_id
@@ -741,6 +763,7 @@ def sync():
             timestamp=timestamp,
             notes=session_info.get('notes'),
             perceived_exertion=perceived_exertion,
+            user_id=current_user.id,
         )
         sessions_to_add.append(new_session)
     for sess in sessions_to_add:
@@ -1056,11 +1079,13 @@ def add_template_to_account(template_plan_id):
     db.session.flush()  # Neue ID generieren
 
     for temp_ex in template_plan.exercises:
-        exercise = Exercise.query.filter_by(name=temp_ex.name, description=temp_ex.description).first()
-        if not exercise:
-            exercise = Exercise(name=temp_ex.name, description=temp_ex.description)
-            db.session.add(exercise)
-            db.session.flush()
+        exercise = Exercise(
+            name=temp_ex.name,
+            description=temp_ex.description,
+            user_id=current_user.id,
+        )
+        db.session.add(exercise)
+        db.session.flush()
         new_plan.exercises.append(exercise)
 
     db.session.commit()
@@ -1148,9 +1173,13 @@ def api_add_exercise(plan_id):
     if not name:
         return jsonify({'error': 'name required'}), 400
     desc = data.get('description')
-    exercise = Exercise.query.filter_by(name=name, description=desc).first()
+    exercise = (
+        Exercise.query
+        .filter_by(name=name, description=desc, user_id=current_user.id)
+        .first()
+    )
     if not exercise:
-        exercise = Exercise(name=name, description=desc)
+        exercise = Exercise(name=name, description=desc, user_id=current_user.id)
         db.session.add(exercise)
         db.session.flush()
     if exercise not in plan.exercises:
@@ -1165,7 +1194,12 @@ def api_get_sessions(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
-    sessions = ExerciseSession.query.filter_by(exercise_id=exercise_id).order_by(ExerciseSession.timestamp.asc()).all()
+    sessions = (
+        ExerciseSession.query
+        .filter_by(exercise_id=exercise_id, user_id=current_user.id)
+        .order_by(ExerciseSession.timestamp.asc())
+        .all()
+    )
     include_aggregates = request.args.get('include_aggregates', '').lower() in ('1', 'true', 'yes')
     serialized_sessions = [serialize_session(s) for s in sessions]
     if not include_aggregates:
@@ -1208,6 +1242,7 @@ def api_add_session(exercise_id):
         timestamp=datetime.datetime.now(),
         notes=notes,
         perceived_exertion=perceived_exertion,
+        user_id=current_user.id,
     )
     db.session.add(new_session)
     db.session.commit()
@@ -1268,7 +1303,7 @@ def export_training_data():
                 exercise_cache[exercise.id] = serialize_exercise(exercise)
             sessions = (
                 ExerciseSession.query
-                .filter_by(exercise_id=exercise.id)
+                .filter_by(exercise_id=exercise.id, user_id=current_user.id)
                 .order_by(ExerciseSession.timestamp.asc())
                 .all()
             )
