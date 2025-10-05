@@ -17,6 +17,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
+from urllib.parse import urlparse
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import io
@@ -125,12 +126,21 @@ class FooterPage(db.Model):
     content = db.Column(db.Text, nullable=False)
 
 
+class FooterLink(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+
+
 @app.context_processor
 def inject_footer_pages():
     """Provide footer pages to all templates."""
 
     _ensure_database_setup_once()
-    return {"footer_pages": FooterPage.query.all()}
+    return {
+        "footer_pages": FooterPage.query.all(),
+        "footer_links": FooterLink.query.all(),
+    }
 
 
 @login_manager.user_loader
@@ -254,6 +264,33 @@ class FooterPageForm(FlaskForm):
     submit = SubmitField('Speichern')
 
 class DeleteFooterPageForm(FlaskForm):
+
+    submit = SubmitField('Löschen')
+
+
+class FooterLinkForm(FlaskForm):
+    title = StringField('Link-Text', validators=[DataRequired()])
+    url = StringField('URL', validators=[DataRequired()])
+    submit = SubmitField('Speichern')
+
+    @staticmethod
+    def _is_valid_absolute_url(url: str) -> bool:
+        parsed = urlparse(url)
+        return bool(parsed.scheme and parsed.netloc)
+
+    def validate_url(self, field):  # noqa: D401 - Flask-WTF convention
+        """Allow absolute URLs or relative paths starting with '/'."""
+
+        value = (field.data or "").strip()
+        if value.startswith('/'):
+            return
+        if not self._is_valid_absolute_url(value):
+            raise ValidationError(
+                "Bitte gib eine gültige URL (z. B. https://...) oder einen relativen Pfad beginnend mit '/' an."
+            )
+
+
+class DeleteFooterLinkForm(FlaskForm):
 
     submit = SubmitField('Löschen')
 
@@ -791,6 +828,54 @@ def admin_remove_trainer(user_id):
         flash(f"Trainer-Rang wurde von {user.username} entfernt.", "success")
         return redirect(url_for('admin_overview'))
     abort(400)
+
+# ----------------------------------------------------
+# Footer-Links verwalten
+# ----------------------------------------------------
+@app.route('/admin/footer_links', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_footer_links():
+    form = FooterLinkForm()
+    delete_form = DeleteFooterLinkForm()
+    if form.validate_on_submit():
+        new_link = FooterLink(title=form.title.data.strip(), url=form.url.data.strip())
+        db.session.add(new_link)
+        db.session.commit()
+        flash('Link hinzugefügt!', 'success')
+        return redirect(url_for('admin_footer_links'))
+    links = FooterLink.query.all()
+    return render_template('admin_footer_links.html', links=links, form=form, delete_form=delete_form)
+
+
+@app.route('/admin/footer_link/<int:link_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_footer_link(link_id):
+    link = FooterLink.query.get_or_404(link_id)
+    form = FooterLinkForm(obj=link)
+    if form.validate_on_submit():
+        link.title = form.title.data.strip()
+        link.url = form.url.data.strip()
+        db.session.commit()
+        flash('Link aktualisiert!', 'success')
+        return redirect(url_for('admin_footer_links'))
+    return render_template('edit_footer_link.html', form=form, link=link)
+
+
+@app.route('/admin/footer_link/<int:link_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_footer_link(link_id):
+    link = FooterLink.query.get_or_404(link_id)
+    form = DeleteFooterLinkForm()
+    if form.validate_on_submit():
+        db.session.delete(link)
+        db.session.commit()
+        flash('Link gelöscht!', 'info')
+        return redirect(url_for('admin_footer_links'))
+    abort(400)
+
 
 # ----------------------------------------------------
 # Footer-Seiten verwalten

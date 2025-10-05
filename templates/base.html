@@ -14,11 +14,16 @@
     <footer class="bg-light border-top py-3 mt-auto">
       <div class="container">
         <nav class="d-flex flex-wrap justify-content-center">
-          {% for page in footer_pages %}
-            <a href="{{ url_for('view_footer_page', page_id=page.id) }}" class="text-muted small mx-2 my-1">{{ page.title }}</a>
+          {% if footer_pages or footer_links %}
+            {% for page in footer_pages %}
+              <a href="{{ url_for('view_footer_page', page_id=page.id) }}" class="text-muted small mx-2 my-1">{{ page.title }}</a>
+            {% endfor %}
+            {% for link in footer_links %}
+              <a href="{{ link.url }}" class="text-muted small mx-2 my-1">{{ link.title }}</a>
+            {% endfor %}
           {% else %}
             <span class="text-muted small">&copy; {{ config.get('APP_NAME', 'Gewichts-Tracker') }}</span>
-          {% endfor %}
+          {% endif %}
         </nav>
       </div>
     </footer>
