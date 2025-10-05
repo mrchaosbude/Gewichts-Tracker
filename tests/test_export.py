@@ -35,7 +35,7 @@ def client():
         db.session.add(plan)
         db.session.flush()
 
-        exercise = Exercise(name='Kniebeuge', description='Langhantel')
+        exercise = Exercise(name='Kniebeuge', description='Langhantel', user_id=user.id)
         db.session.add(exercise)
         db.session.flush()
         plan.exercises.append(exercise)
@@ -47,6 +47,7 @@ def client():
             weight=100,
             notes='Saubere Technik',
             perceived_exertion=8,
+            user_id=user.id,
         )
         db.session.add(session)
         db.session.commit()
