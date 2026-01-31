@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
