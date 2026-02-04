@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Trainingsplan aus Markdown importieren{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Trainingsplan aus Markdown importieren</h2>
+
+    <div class="alert alert-info">
+        <strong>Format:</strong>
+        <pre class="mb-0 bg-light p-2 mt-2" style="white-space: pre-wrap;">
+# Plantitel
+
+Optionale Planbeschreibung (max. 300 Zeichen)
+
+## Bankdrücken
+Klassische Brustübung mit der Langhantel.
+- 3-4 Sätze
+- 8-12 Wiederholungen
+
+## Kniebeuge
+Grundübung für die Beine.
+
+Varianten: High Bar, Low Bar, Front Squat</pre>
+    </div>
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.markdown_content.label }}
+            {{ form.markdown_content(class="form-control", style="font-family: monospace; min-height: 300px;", rows="15", placeholder="# Mein Trainingsplan\n\nBeschreibung...\n\n## Übung 1\nDetails zur Übung...") }}
+        </div>
+
+        <div class="form-group">
+            <button type="submit" name="action" value="preview" class="btn btn-secondary">Vorschau</button>
+            <button type="submit" name="action" value="import" class="btn btn-primary">Importieren</button>
+        </div>
+    </form>
+
+    {% if preview %}
+    <hr>
+    <h3>Vorschau</h3>
+    {% if preview.errors %}
+        <div class="alert alert-danger">
+            <strong>Fehler gefunden:</strong>
+            <ul class="mb-0">
+            {% for error in preview.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if preview.plan_title %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <strong>{{ preview.plan_title }}</strong>
+            </div>
+            <div class="card-body">
+                {% if preview.plan_description %}
+                    <p class="card-text">{{ preview.plan_description }}</p>
+                {% endif %}
+                <h5>Übungen ({{ preview.exercises|length }}):</h5>
+                <ul class="list-group">
+                {% for ex in preview.exercises %}
+                    <li class="list-group-item">
+                        <strong>{{ ex.name }}</strong>
+                        {% if ex.description %}
+                            <br><small class="text-muted" style="white-space: pre-line;">{{ ex.description }}</small>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
+    {% endif %}
+
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+</div>
+{% endblock %}

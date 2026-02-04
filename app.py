@@ -12,6 +12,7 @@ from flask import (
     send_file,
 )
 import markdown
+import bleach
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
@@ -297,6 +298,113 @@ class DeleteFooterLinkForm(FlaskForm):
 
     submit = SubmitField('Löschen')
 
+
+class MarkdownImportForm(FlaskForm):
+    markdown_content = TextAreaField('Markdown Inhalt', validators=[DataRequired()])
+    submit = SubmitField('Importieren')
+
+
+# ----------------------------------------------------
+# Markdown Parser für Trainingspläne
+# ----------------------------------------------------
+
+def parse_training_plan_markdown(content: str) -> dict:
+    """
+    Parse Markdown content into a training plan structure.
+
+    Format:
+    # Plan Title
+    Plan description (optional)
+
+    ## Exercise 1 Name
+    Exercise 1 description (all content until next ## or end)
+
+    ## Exercise 2 Name
+    Exercise 2 description
+
+    Returns:
+        {
+            'success': bool,
+            'plan_title': str,
+            'plan_description': str,
+            'exercises': [{'name': str, 'description': str}, ...],
+            'errors': [str, ...]
+        }
+    """
+    errors = []
+    lines = content.strip().split('\n')
+
+    plan_title = None
+    plan_description_lines = []
+    exercises = []
+    current_exercise = None
+    current_exercise_desc_lines = []
+    in_plan_description = False
+
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+
+        # Check for H1 (plan title) - must not start with ##
+        if stripped.startswith('# ') and not stripped.startswith('## '):
+            if plan_title is not None:
+                errors.append(f"Zeile {i}: Mehrere H1-Überschriften gefunden. Nur ein Plantitel erlaubt.")
+                continue
+            plan_title = stripped[2:].strip()
+            if len(plan_title) > 150:
+                errors.append(f"Zeile {i}: Plantitel zu lang ({len(plan_title)}/150 Zeichen).")
+            in_plan_description = True
+            continue
+
+        # Check for H2 (exercise)
+        if stripped.startswith('## '):
+            # Save previous exercise if exists
+            if current_exercise:
+                desc = '\n'.join(current_exercise_desc_lines).strip()
+                if len(desc) > 300:
+                    errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
+                exercises.append({'name': current_exercise, 'description': desc[:300]})
+
+            current_exercise = stripped[3:].strip()
+            if len(current_exercise) > 150:
+                errors.append(f"Zeile {i}: Übungsname zu lang ({len(current_exercise)}/150 Zeichen).")
+            current_exercise_desc_lines = []
+            in_plan_description = False
+            continue
+
+        # Accumulate description lines
+        if plan_title and current_exercise is None and in_plan_description:
+            plan_description_lines.append(line)
+        elif current_exercise:
+            current_exercise_desc_lines.append(line)
+
+    # Don't forget the last exercise
+    if current_exercise:
+        desc = '\n'.join(current_exercise_desc_lines).strip()
+        if len(desc) > 300:
+            errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
+        exercises.append({'name': current_exercise, 'description': desc[:300]})
+
+    # Validate required fields
+    if not plan_title:
+        errors.append("Kein Plantitel gefunden. Beginne mit '# Titel'.")
+
+    if not exercises:
+        errors.append("Keine Übungen gefunden. Füge Übungen mit '## Übungsname' hinzu.")
+
+    plan_description = '\n'.join(plan_description_lines).strip()
+    if len(plan_description) > 300:
+        errors.append(f"Planbeschreibung zu lang ({len(plan_description)}/300 Zeichen). Wird abgeschnitten.")
+        plan_description = plan_description[:300]
+
+    return {
+        'success': len(errors) == 0,
+        'plan_title': plan_title or '',
+        'plan_description': plan_description,
+        'exercises': exercises,
+        'errors': errors
+    }
+
+
 # ----------------------------------------------------
 # Analyse- und Statistik-Helfer
 # ----------------------------------------------------
@@ -514,6 +622,54 @@ def create_training_plan():
         flash('Trainingsplan erstellt!', 'success')
         return redirect(url_for('dashboard'))
     return render_template('create_training_plan.html', form=form)
+
+
+@app.route('/import_training_plan', methods=['GET', 'POST'])
+@login_required
+def import_training_plan():
+    form = MarkdownImportForm()
+    preview = None
+
+    if form.validate_on_submit():
+        parsed = parse_training_plan_markdown(form.markdown_content.data)
+
+        # Check if this is a preview request
+        if request.form.get('action') == 'preview':
+            preview = parsed
+            return render_template('import_training_plan.html', form=form, preview=preview)
+
+        # Import action
+        if not parsed['success']:
+            for error in parsed['errors']:
+                flash(error, 'danger')
+            return render_template('import_training_plan.html', form=form, preview=parsed)
+
+        # Create the training plan
+        new_plan = TrainingPlan(
+            title=parsed['plan_title'],
+            description=parsed['plan_description'],
+            user_id=current_user.id
+        )
+        db.session.add(new_plan)
+        db.session.flush()
+
+        # Create exercises - each user gets their own copy
+        for ex_data in parsed['exercises']:
+            exercise = Exercise(
+                name=ex_data['name'],
+                description=ex_data['description'],
+                user_id=current_user.id
+            )
+            db.session.add(exercise)
+            db.session.flush()
+            new_plan.exercises.append(exercise)
+
+        db.session.commit()
+        flash(f"Trainingsplan '{new_plan.title}' mit {len(parsed['exercises'])} Übungen importiert!", 'success')
+        return redirect(url_for('training_plan_detail', training_plan_id=new_plan.id))
+
+    return render_template('import_training_plan.html', form=form, preview=preview)
+
 
 @app.route('/training_plan/<int:training_plan_id>')
 @login_required
@@ -948,7 +1104,19 @@ def delete_footer_page(page_id):
 @app.route('/page/<int:page_id>')
 def view_footer_page(page_id):
     page = FooterPage.query.get_or_404(page_id)
-    html = markdown.markdown(page.content)
+    # Convert markdown to HTML
+    raw_html = markdown.markdown(page.content)
+    # Sanitize HTML - only allow safe tags for formatted text
+    allowed_tags = [
+        'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'hr', 'a'
+    ]
+    allowed_attrs = {
+        'a': ['href', 'title'],  # Allow links but not javascript:
+    }
+    html = bleach.clean(raw_html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+    # Ensure links don't use javascript: protocol
+    html = bleach.linkify(html)
     return render_template('footer_page.html', page=page, html_content=html)
 
 
@@ -981,6 +1149,54 @@ def create_template_plan():
         flash('Template Trainingsplan erstellt!', 'success')
         return redirect(url_for('admin_template_plans'))
     return render_template('create_template_plan.html', form=form)
+
+
+@app.route('/admin/template_plan/import', methods=['GET', 'POST'])
+@login_required
+@trainer_or_admin_required
+def import_template_plan():
+    form = MarkdownImportForm()
+    preview = None
+
+    if form.validate_on_submit():
+        parsed = parse_training_plan_markdown(form.markdown_content.data)
+
+        # Check if this is a preview request
+        if request.form.get('action') == 'preview':
+            preview = parsed
+            return render_template('import_template_plan.html', form=form, preview=preview)
+
+        # Import action
+        if not parsed['success']:
+            for error in parsed['errors']:
+                flash(error, 'danger')
+            return render_template('import_template_plan.html', form=form, preview=parsed)
+
+        # Create the template training plan
+        new_template = TemplateTrainingPlan(
+            title=parsed['plan_title'],
+            description=parsed['plan_description'],
+            creator_id=current_user.id,
+            is_visible=True
+        )
+        db.session.add(new_template)
+        db.session.flush()
+
+        # Create template exercises
+        for ex_data in parsed['exercises']:
+            template_exercise = TemplateExercise(
+                name=ex_data['name'],
+                description=ex_data['description'],
+                template_plan_id=new_template.id
+            )
+            db.session.add(template_exercise)
+
+        db.session.commit()
+        flash(f"Template '{new_template.title}' mit {len(parsed['exercises'])} Übungen importiert!", 'success')
+        return redirect(url_for('admin_template_plans'))
+
+    return render_template('import_template_plan.html', form=form, preview=preview)
+
 
 @app.route('/admin/template_plan/<int:template_plan_id>/edit', methods=['GET','POST'])
 @login_required

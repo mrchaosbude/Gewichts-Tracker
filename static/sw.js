@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fitness-app-cache-v2';
+const CACHE_NAME = 'fitness-app-cache-v3';
 const STATIC_ASSETS = [
   '/fit',
   '/static/manifest.json',

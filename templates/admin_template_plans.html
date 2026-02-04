@@ -5,9 +5,14 @@
 {% block content %}
   <div class="container">
     <h2 class="mb-4">Admin – Template Trainingspläne</h2>
-    <a href="{{ url_for('create_template_plan') }}" class="btn btn-success mb-3 btn-block">
-      Neuen Template Trainingsplan erstellen
-    </a>
+    <div class="btn-group mb-3 btn-block" role="group">
+      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success">
+        Neuen Template erstellen
+      </a>
+      <a href="{{ url_for('import_template_plan') }}" class="btn btn-outline-success">
+        Aus Markdown importieren
+      </a>
+    </div>
     <table class="table table-striped">
       <thead>
         <tr>

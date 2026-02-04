@@ -13,7 +13,10 @@
       {% endif %}
     </p>
     <h3>Deine Trainingspläne</h3>
-    <a href="{{ url_for('create_training_plan') }}" class="btn btn-success mb-3 btn-block">Neuen Trainingsplan erstellen</a>
+    <div class="btn-group mb-3 btn-block" role="group">
+      <a href="{{ url_for('create_training_plan') }}" class="btn btn-success">Neuen Trainingsplan erstellen</a>
+      <a href="{{ url_for('import_training_plan') }}" class="btn btn-outline-success">Aus Markdown importieren</a>
+    </div>
     <ul class="list-group">
       {% for plan in training_plans %}
         <li class="list-group-item">

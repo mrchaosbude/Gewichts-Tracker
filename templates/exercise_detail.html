@@ -85,7 +85,7 @@
                   <div>Wahrgenommene Anstrengung (RPE): {{ session.perceived_exertion }}</div>
                 {% endif %}
                 {% if session.notes %}
-                  <div>Notizen: {{ session.notes.replace('\n', '<br>')|safe }}</div>
+                  <div>Notizen: <span style="white-space: pre-line;">{{ session.notes }}</span></div>
                 {% endif %}
               </div>
             {% endif %}
