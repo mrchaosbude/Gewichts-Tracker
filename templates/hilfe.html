@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+
+{% block title %}Hilfe & FAQ{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .faq-section {
+      margin-bottom: 1.5rem;
+    }
+    .faq-q {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.3rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .faq-q::after {
+      content: '\25BC';
+      font-size: 0.65rem;
+      color: #6c757d;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+      margin-left: 0.5rem;
+    }
+    .faq-item[open] .faq-q::after {
+      transform: rotate(180deg);
+    }
+    .faq-a {
+      font-size: 0.85rem;
+      color: #495057;
+      line-height: 1.6;
+      padding-top: 0.3rem;
+    }
+    .faq-a ol, .faq-a ul {
+      padding-left: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .faq-a li {
+      margin-bottom: 0.25rem;
+    }
+    .faq-item {
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      padding: 0.65rem 0;
+    }
+    .faq-item:last-child {
+      border-bottom: none;
+    }
+    .faq-item summary {
+      list-style: none;
+    }
+    .faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+    .step-box {
+      background: rgba(0,123,255,0.06);
+      border-left: 3px solid #007bff;
+      border-radius: 0 0.5rem 0.5rem 0;
+      padding: 0.6rem 0.8rem;
+      margin: 0.5rem 0;
+      font-size: 0.82rem;
+    }
+    .step-box strong {
+      color: #007bff;
+    }
+    .tip-box {
+      background: rgba(40,167,69,0.06);
+      border-left: 3px solid #28a745;
+      border-radius: 0 0.5rem 0.5rem 0;
+      padding: 0.6rem 0.8rem;
+      margin: 0.5rem 0;
+      font-size: 0.82rem;
+    }
+    .tip-box strong {
+      color: #28a745;
+    }
+    [data-theme="dark"] .faq-a { color: #c0c0c0; }
+    [data-theme="dark"] .faq-item { border-color: rgba(255,255,255,0.06); }
+    [data-theme="dark"] .step-box { background: rgba(0,123,255,0.1); }
+    [data-theme="dark"] .step-box strong { color: #6eb5ff; }
+    [data-theme="dark"] .tip-box { background: rgba(40,167,69,0.1); }
+    [data-theme="dark"] .tip-box strong { color: #5cb85c; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Hilfe & FAQ</h2>
+
+    <!-- ======== APP MODUS ======== -->
+    <div class="section-label">App-Modus (Offline nutzen)</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item" open>
+        <summary class="faq-q">Wie installiere ich die App auf meinem iPhone?</summary>
+        <div class="faq-a">
+          <div class="step-box">
+            <strong>Schritt 1:</strong> Offne die App in <strong>Safari</strong> (nicht Chrome oder Firefox &ndash; nur Safari unterstutzt App-Modus auf iOS).
+          </div>
+          <div class="step-box">
+            <strong>Schritt 2:</strong> Tippe auf das <strong>Teilen-Symbol</strong> (das Quadrat mit dem Pfeil nach oben) in der unteren Leiste.
+          </div>
+          <div class="step-box">
+            <strong>Schritt 3:</strong> Scrolle nach unten und tippe auf <strong>&bdquo;Zum Home-Bildschirm&ldquo;</strong>.
+          </div>
+          <div class="step-box">
+            <strong>Schritt 4:</strong> Bestatige mit <strong>&bdquo;Hinzufugen&ldquo;</strong>.
+          </div>
+          <div class="tip-box">
+            <strong>Wichtig:</strong> Melde dich <strong>einmal an</strong>, wahrend du online bist. Danach funktioniert die App auch ohne Internet &ndash; du kannst Satze eintragen und sie werden automatisch synchronisiert, sobald du wieder online bist.
+          </div>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie installiere ich die App auf Android?</summary>
+        <div class="faq-a">
+          <div class="step-box">
+            <strong>Schritt 1:</strong> Offne die App in <strong>Google Chrome</strong>.
+          </div>
+          <div class="step-box">
+            <strong>Schritt 2:</strong> Chrome zeigt automatisch ein Banner <strong>&bdquo;App installieren&ldquo;</strong> an. Tippe darauf.
+          </div>
+          <div class="step-box">
+            <strong>Schritt 3:</strong> Falls kein Banner erscheint: Tippe auf die <strong>drei Punkte</strong> (oben rechts) und wahle <strong>&bdquo;App installieren&ldquo;</strong> oder <strong>&bdquo;Zum Startbildschirm hinzufugen&ldquo;</strong>.
+          </div>
+          <div class="tip-box">
+            <strong>Tipp:</strong> Nach der Installation findest du die App wie jede andere App auf deinem Startbildschirm. Sie offnet sich ohne Browser-Leiste im Vollbild.
+          </div>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Was funktioniert offline?</summary>
+        <div class="faq-a">
+          <p>Wenn du im App-Modus eingeloggt bist und offline gehst:</p>
+          <ul>
+            <li><strong>Satze eintragen</strong> &ndash; werden lokal gespeichert und beim nachsten Online-Sein automatisch synchronisiert</li>
+            <li><strong>Pause-Timer</strong> &ndash; funktioniert komplett offline</li>
+          </ul>
+          <p>Diese Funktionen benotigen eine Internetverbindung:</p>
+          <ul>
+            <li>Trainingsplan erstellen/andern</li>
+            <li>Statistiken und Charts laden</li>
+            <li>Fotos hochladen</li>
+            <li>Anmelden (erster Login muss online sein)</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <!-- ======== TRAINING ======== -->
+    <div class="section-label">Training</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie erstelle ich einen Trainingsplan?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Gehe zum <strong>Dashboard</strong> und tippe auf <strong>&bdquo;+ Neuer Trainingsplan&ldquo;</strong>.</li>
+            <li>Gib einen <strong>Titel</strong> und optional eine Beschreibung ein.</li>
+            <li>Im Plan tippst du auf <strong>&bdquo;+ Ubung hinzufugen&ldquo;</strong>, um Ubungen anzulegen.</li>
+            <li>Du kannst vorhandene Ubungen auswahlen oder neue erstellen.</li>
+          </ol>
+          <div class="tip-box">
+            <strong>Tipp:</strong> Trainer und Admins konnen Trainingplane auch aus <strong>Markdown</strong> importieren &ndash; ideal fur vorgefertigte Plane.
+          </div>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie trage ich einen Satz ein?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Offne deinen <strong>Trainingsplan</strong>.</li>
+            <li>Tippe auf <strong>&bdquo;Details&ldquo;</strong> bei einer Ubung.</li>
+            <li>Auf der Ubungsseite tippe auf <strong>&bdquo;Satz hinzufugen&ldquo;</strong>.</li>
+            <li>Gib <strong>Gewicht</strong> und <strong>Wiederholungen</strong> ein.</li>
+            <li>Optional: RPE (1-10) und Notizen hinzufugen.</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Was ist der Pause-Timer?</summary>
+        <div class="faq-a">
+          <p>Der Pause-Timer startet automatisch nach dem Speichern eines Satzes:</p>
+          <ol>
+            <li>Trage <strong>Gewicht</strong> und <strong>Wiederholungen</strong> ein.</li>
+            <li>Stelle die <strong>Pausenzeit</strong> in Sekunden ein (Standard: 60s).</li>
+            <li>Tippe auf <strong>&bdquo;Pause starten&ldquo;</strong>.</li>
+            <li>Der Satz wird gespeichert und der Timer zahlt runter.</li>
+          </ol>
+          <div class="tip-box">
+            <strong>Tipp:</strong> Der Timer merkt sich deine letzte Pausenzeit. Das Display bleibt wahrend der Pause an.
+          </div>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Was sind Supersets?</summary>
+        <div class="faq-a">
+          <p>Supersets gruppieren Ubungen, die direkt nacheinander ausgefuhrt werden. Ubungen mit der gleichen Superset-Nummer gehoren zusammen und werden farblich markiert.</p>
+          <p>So setzt du ein Superset:</p>
+          <ol>
+            <li>Im Trainingsplan findest du bei jeder Ubung ein <strong>Nummernfeld &bdquo;SS #&ldquo;</strong>.</li>
+            <li>Gib allen Ubungen, die zusammengehoren, die <strong>gleiche Nummer</strong> (z.B. 1).</li>
+            <li>Tippe auf <strong>&bdquo;Setzen&ldquo;</strong>.</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie andere ich die Reihenfolge der Ubungen?</summary>
+        <div class="faq-a">
+          <p>Im Trainingsplan findest du bei jeder Ubung <strong>Pfeil-Buttons</strong> (hoch/runter). Damit verschiebst du die Ubung in der Liste nach oben oder unten.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Was ist die Deload-Erinnerung?</summary>
+        <div class="faq-a">
+          <p>Wenn du <strong>6 oder mehr Wochen</strong> am Stuck trainiert hast, zeigt das Dashboard eine Warnung. Ein Deload (leichtere Trainingswoche) hilft bei der Regeneration und beugt Ubertraining vor.</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- ======== KALENDER & PLANUNG ======== -->
+    <div class="section-label">Kalender & Planung</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie plane ich Trainingstage?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Offne den <strong>Trainings-Kalender</strong> (Dashboard &rarr; Kalender).</li>
+            <li>Tippe auf einen <strong>Tag</strong> im Kalender.</li>
+            <li>Gib optional eine <strong>Bezeichnung</strong> ein (z.B. &bdquo;Push&ldquo;, &bdquo;Beine&ldquo;).</li>
+            <li>Tippe auf <strong>&bdquo;Training planen&ldquo;</strong>.</li>
+          </ol>
+          <p>Geplante Tage werden mit einem <strong>blauen Rand</strong> markiert. Wenn du an einem geplanten Tag trainiert hast, wird er <strong>grun</strong>.</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- ======== STATISTIK & FORTSCHRITT ======== -->
+    <div class="section-label">Statistik & Fortschritt</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item">
+        <summary class="faq-q">Was zeigen die Statistiken?</summary>
+        <div class="faq-a">
+          <ul>
+            <li><strong>Wochenvergleich</strong> &ndash; Satze und Volumen dieser vs. letzter Woche</li>
+            <li><strong>Ubungsvergleich</strong> &ndash; Max-Gewicht pro Ubung im Wochenvergleich</li>
+            <li><strong>Muskelgruppen</strong> &ndash; Volumenverteilung als Donut-Diagramm (wenn Ubungen Muskelgruppen zugewiesen sind)</li>
+            <li><strong>Trainingsfrequenz</strong> &ndash; Trainingstage und Volumen der letzten 12 Wochen</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Was sind Achievements?</summary>
+        <div class="faq-a">
+          <p>Achievements sind Auszeichnungen fur Meilensteine, z.B.:</p>
+          <ul>
+            <li>Erster Satz, 100 Satze, 1.000 Satze</li>
+            <li>7 Trainingstage, 30 Tage, 100 Tage</li>
+            <li>1 Jahr dabei</li>
+          </ul>
+          <p>Freigeschaltete Achievements werden gold hervorgehoben.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie funktioniert das Korpergewicht-Tracking?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Gehe zu <strong>Dashboard &rarr; Gewicht</strong>.</li>
+            <li>Trage dein aktuelles <strong>Gewicht</strong> ein (optional mit Notiz).</li>
+            <li>Nach mehreren Eintragen siehst du einen <strong>Verlaufschart</strong>, Durchschnitt, Min/Max und die Veranderung.</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie nutze ich die Fortschrittsfotos?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Gehe zu <strong>Dashboard &rarr; Fotos</strong>.</li>
+            <li>Wahle ein <strong>Foto</strong> aus und gib optional Gewicht und Notizen ein (z.B. &bdquo;Front&ldquo;, &bdquo;Seite&ldquo;).</li>
+            <li>Tippe auf ein Foto in der Galerie, um es im <strong>Vollbild</strong> zu sehen.</li>
+          </ol>
+        </div>
+      </details>
+    </div>
+
+    <!-- ======== TEILEN & EXPORT ======== -->
+    <div class="section-label">Teilen & Export</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie teile ich meinen Trainingsplan?</summary>
+        <div class="faq-a">
+          <ol>
+            <li>Offne deinen <strong>Trainingsplan</strong>.</li>
+            <li>Tippe auf <strong>&bdquo;Plan teilen&ldquo;</strong>.</li>
+            <li>Ein <strong>Share-Link</strong> wird erstellt. Kopiere und sende ihn.</li>
+            <li>Wer den Link offnet, kann den Plan zu seinem Konto <strong>kopieren</strong>.</li>
+          </ol>
+          <p>Du kannst das Teilen jederzeit uber <strong>&bdquo;Teilen deaktivieren&ldquo;</strong> widerrufen.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie exportiere ich meine Daten?</summary>
+        <div class="faq-a">
+          <p>Gehe zu <strong>Dashboard &rarr; Export</strong>. Du erhaltst eine ZIP-Datei mit all deinen Trainingsdaten als CSV-Dateien.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-q">Kann ich einen Trainingsplan drucken?</summary>
+        <div class="faq-a">
+          <p>Ja! Im Trainingsplan findest du den Button <strong>&bdquo;Drucken / PDF&ldquo;</strong>. Damit offnet sich eine druckoptimierte Ansicht. Nutze die Druckfunktion deines Browsers, um ein PDF zu erstellen.</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- ======== DARK MODE ======== -->
+    <div class="section-label">Design</div>
+    <div class="s-card faq-section">
+
+      <details class="faq-item">
+        <summary class="faq-q">Wie aktiviere ich den Dark Mode?</summary>
+        <div class="faq-a">
+          <p>Tippe auf das <strong>Mond-Symbol</strong> (oder Sonnen-Symbol) im Footer der Seite. Die App merkt sich deine Einstellung. Standardmassig folgt sie deiner System-Einstellung.</p>
+        </div>
+      </details>
+    </div>
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zuruck zum Dashboard</a>
+  </div>
+{% endblock %}

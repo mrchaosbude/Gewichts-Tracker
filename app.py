@@ -983,6 +983,15 @@ def achievements():
 
 
 # ----------------------------------------------------
+# Hilfe / FAQ
+# ----------------------------------------------------
+@app.route('/hilfe')
+@login_required
+def hilfe():
+    return render_template('hilfe.html')
+
+
+# ----------------------------------------------------
 # Fortschrittsfotos
 # ----------------------------------------------------
 @app.route('/progress_photos', methods=['GET', 'POST'])

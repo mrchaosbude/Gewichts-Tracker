@@ -326,6 +326,10 @@
         <div class="nav-icon" style="background:#e8e8e8;color:#6c757d;">&#128190;</div>
         Export
       </a>
+      <a href="{{ url_for('hilfe') }}">
+        <div class="nav-icon" style="background:#e8f4fd;color:#17a2b8;">&#10068;</div>
+        Hilfe
+      </a>
     </div>
 
     {% if current_user.is_admin or current_user.is_trainer %}
