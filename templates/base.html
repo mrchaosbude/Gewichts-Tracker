@@ -168,6 +168,103 @@
         border-radius: 4px;
         font-size: 0.9rem;
       }
+      /* ---- Shared App Design System ---- */
+      .page-wrap {
+        max-width: 540px;
+        margin: 0 auto;
+        padding: 0 15px;
+      }
+      .page-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+      }
+      .section-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+      }
+      .s-card {
+        background: #fff;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 0.75rem;
+      }
+      .s-card-flush { padding: 0; overflow: hidden; }
+      .stat-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .stat-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+      .stat-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+      .stat-box {
+        background: #fff;
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.5rem;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .stat-box .val { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+      .stat-box .lbl { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.03em; }
+      .stat-box.blue { border-top: 3px solid #007bff; }
+      .stat-box.green { border-top: 3px solid #28a745; }
+      .stat-box.orange { border-top: 3px solid #fd7e14; }
+      .stat-box.purple { border-top: 3px solid #6f42c1; }
+      .stat-box.red { border-top: 3px solid #dc3545; }
+      .stat-box.teal { border-top: 3px solid #17a2b8; }
+      .back-link {
+        display: block;
+        text-align: center;
+        padding: 0.65rem;
+        color: #6c757d;
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-top: 1rem;
+      }
+      .back-link:hover { color: #333; text-decoration: none; }
+      .form-card { padding: 1rem; }
+      [data-theme="dark"] .s-card, [data-theme="dark"] .stat-box { background: #16213e; color: #eaeaea; }
+      [data-theme="dark"] .stat-box .lbl, [data-theme="dark"] .section-label { color: #a0a0a0; }
+      [data-theme="dark"] .back-link { color: #a0a0a0; }
+      [data-theme="dark"] .back-link:hover { color: #eaeaea; }
+
+      /* ---- Responsive Breakpoints ---- */
+      @media (max-width: 359px) {
+        .page-wrap { padding: 0 10px; }
+        .page-title { font-size: 1.15rem; }
+        .stat-row.cols-4 { grid-template-columns: repeat(2, 1fr); }
+        .stat-row.cols-3 { grid-template-columns: repeat(2, 1fr); }
+        .stat-box .val { font-size: 1.15rem; }
+        .stat-box { padding: 0.5rem 0.3rem; }
+        .s-card { padding: 0.75rem; }
+        .section-label { font-size: 0.7rem; }
+      }
+      @media (min-width: 768px) {
+        .page-wrap { max-width: 680px; }
+        .page-title { font-size: 1.6rem; }
+        .s-card { padding: 1.25rem; }
+        .stat-box .val { font-size: 1.7rem; }
+        .stat-box { padding: 0.9rem 0.6rem; }
+        .stat-row { gap: 1rem; }
+        .section-label { font-size: 0.85rem; }
+        .back-link { font-size: 1rem; }
+      }
+      @media (min-width: 1024px) {
+        .page-wrap { max-width: 800px; }
+        .page-title { font-size: 1.8rem; margin-bottom: 1.25rem; }
+        .s-card { padding: 1.5rem; border-radius: 1rem; }
+        .stat-box { padding: 1rem 0.75rem; border-radius: 1rem; }
+        .stat-box .val { font-size: 1.9rem; }
+        .stat-box .lbl { font-size: 0.75rem; }
+        .stat-row { gap: 1.25rem; margin-bottom: 1.25rem; }
+        .section-label { font-size: 0.9rem; margin-bottom: 0.75rem; }
+      }
     </style>
     {% block extra_head %}{% endblock %}
   </head>

@@ -3,20 +3,20 @@
 {% block title %}Template Trainingsplan bearbeiten{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Template Trainingsplan bearbeiten</h2>
-    <form method="POST">
-      {{ form.hidden_tag() }}
-      <div class="form-group">
-        {{ form.title.label }} {{ form.title(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.description.label }} {{ form.description(class="form-control") }}
-      </div>
-      <div class="form-group">
+  <div class="page-wrap">
+    <h2 class="page-title">Template bearbeiten</h2>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.title.label(class="small font-weight-bold") }} {{ form.title(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.description.label(class="small font-weight-bold") }} {{ form.description(class="form-control") }}
+        </div>
         {{ form.submit(class="btn btn-primary btn-block") }}
-      </div>
-    </form>
-    <a href="{{ url_for('admin_template_plans') }}" class="btn btn-secondary btn-block">Zurück</a>
+      </form>
+    </div>
+    <a href="{{ url_for('admin_template_plans') }}" class="back-link">&larr; Zurück zu Templates</a>
   </div>
 {% endblock %}

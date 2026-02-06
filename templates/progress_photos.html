@@ -6,79 +6,85 @@
   <style>
     .photo-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
     }
     .photo-card {
-      border: 1px solid #dee2e6;
-      border-radius: 0.5rem;
+      border-radius: 0.75rem;
       overflow: hidden;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     .photo-card img {
       width: 100%;
-      height: 200px;
+      height: 180px;
       object-fit: cover;
       cursor: pointer;
+      display: block;
     }
     .photo-card .photo-info {
-      padding: 0.5rem;
-      font-size: 0.85rem;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.8rem;
     }
-    .photo-modal-img {
-      max-width: 100%;
-      max-height: 80vh;
+    .photo-modal-img { max-width: 100%; max-height: 85vh; }
+    [data-theme="dark"] .photo-card { background: #16213e; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+    @media (max-width: 359px) {
+      .photo-grid { grid-template-columns: 1fr; }
+      .photo-card img { height: 220px; }
     }
-    [data-theme="dark"] .photo-card {
-      border-color: #444;
+    @media (min-width: 768px) {
+      .photo-grid { grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+      .photo-card img { height: 220px; }
+      .photo-card .photo-info { padding: 0.6rem 0.8rem; font-size: 0.85rem; }
+    }
+    @media (min-width: 1024px) {
+      .photo-grid { grid-template-columns: repeat(4, 1fr); }
+      .photo-card img { height: 240px; }
+      .photo-card { border-radius: 1rem; }
     }
   </style>
 {% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-3">Fortschrittsfotos</h2>
+  <div class="page-wrap">
+    <h2 class="page-title">Fortschrittsfotos</h2>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <form method="POST" enctype="multipart/form-data">
-          <div class="form-group">
-            <label for="photo">Foto auswählen</label>
-            <input type="file" name="photo" id="photo" class="form-control-file" accept="image/*" required>
+    <div class="s-card mb-3">
+      <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+          <label class="small font-weight-bold" for="photo">Foto auswählen</label>
+          <input type="file" name="photo" id="photo" class="form-control-file" accept="image/*" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-5">
+            <label class="small font-weight-bold" for="body_weight">Gewicht (kg)</label>
+            <input type="number" name="body_weight" id="body_weight" class="form-control" step="0.1" min="0" placeholder="Optional">
           </div>
-          <div class="form-row">
-            <div class="form-group col-md-6">
-              <label for="body_weight">Körpergewicht (kg, optional)</label>
-              <input type="number" name="body_weight" id="body_weight" class="form-control" step="0.1" min="0">
-            </div>
-            <div class="form-group col-md-6">
-              <label for="notes">Notizen (optional)</label>
-              <input type="text" name="notes" id="notes" class="form-control" placeholder="z.B. Front, Seite, Rücken...">
-            </div>
+          <div class="form-group col-7">
+            <label class="small font-weight-bold" for="notes">Notizen</label>
+            <input type="text" name="notes" id="notes" class="form-control" placeholder="z.B. Front, Seite...">
           </div>
-          <button type="submit" class="btn btn-primary btn-block">Hochladen</button>
-        </form>
-      </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Hochladen</button>
+      </form>
     </div>
 
     {% if photos %}
+    <div class="section-label">Galerie ({{ photos|length }})</div>
     <div class="photo-grid">
       {% for photo in photos %}
       <div class="photo-card">
         <img src="{{ url_for('static', filename='uploads/photos/' + photo.filename) }}" alt="Fortschrittsfoto" onclick="document.getElementById('modal-img-{{ photo.id }}').style.display='flex'">
         <div class="photo-info">
-          <div><strong>{{ photo.timestamp.strftime('%d.%m.%Y') }}</strong></div>
-          {% if photo.body_weight %}
-            <div>{{ photo.body_weight }} kg</div>
-          {% endif %}
-          {% if photo.notes %}
-            <div class="text-muted">{{ photo.notes }}</div>
-          {% endif %}
-          <form action="{{ url_for('delete_progress_photo', photo_id=photo.id) }}" method="POST" onsubmit="return confirm('Foto wirklich löschen?');" class="mt-1">
+          <strong>{{ photo.timestamp.strftime('%d.%m.%Y') }}</strong>
+          {% if photo.body_weight %}<span class="text-muted"> {{ photo.body_weight }}kg</span>{% endif %}
+          {% if photo.notes %}<div class="text-muted">{{ photo.notes }}</div>{% endif %}
+          <form action="{{ url_for('delete_progress_photo', photo_id=photo.id) }}" method="POST" onsubmit="return confirm('Foto löschen?');" class="mt-1">
             {{ delete_form.hidden_tag() }}
-            <button type="submit" class="btn btn-outline-danger btn-sm btn-block">Löschen</button>
+            <button type="submit" class="btn btn-outline-danger btn-sm btn-block py-0" style="font-size:0.75rem;">Löschen</button>
           </form>
         </div>
-        <!-- Vollbild-Modal -->
         <div id="modal-img-{{ photo.id }}" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; align-items:center; justify-content:center; cursor:pointer;" onclick="this.style.display='none'">
           <img src="{{ url_for('static', filename='uploads/photos/' + photo.filename) }}" class="photo-modal-img">
         </div>
@@ -86,9 +92,9 @@
       {% endfor %}
     </div>
     {% else %}
-      <div class="alert alert-info">Noch keine Fotos hochgeladen. Dokumentiere deinen Fortschritt!</div>
+      <div class="s-card text-center text-muted" style="font-size:0.9rem;">Noch keine Fotos. Dokumentiere deinen Fortschritt!</div>
     {% endif %}
 
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}

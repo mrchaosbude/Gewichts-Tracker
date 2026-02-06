@@ -5,12 +5,14 @@
 {% block extra_head %}{% endblock %}
 
 {% block content %}
-  <div class="container text-center">
-    <h1 class="mb-4">Willkommen in der Fitness App</h1>
-    <p>
-      <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
-      <a href="{{ url_for('register') }}" class="btn btn-secondary">Registrieren</a>
-    </p>
+  <div class="page-wrap" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; text-align:center;">
+    <div style="font-size:3rem; margin-bottom:0.5rem;">&#127947;</div>
+    <h1 style="font-size:1.6rem; font-weight:700; margin-bottom:0.3rem;">Fitness Tracker</h1>
+    <p class="text-muted" style="font-size:0.9rem; margin-bottom:1.5rem;">Tracke dein Training. Erreiche deine Ziele.</p>
+    <div style="display:flex; gap:0.75rem; width:100%; max-width:300px;">
+      <a href="{{ url_for('login') }}" class="btn btn-primary btn-block">Login</a>
+      <a href="{{ url_for('register') }}" class="btn btn-outline-secondary btn-block">Registrieren</a>
+    </div>
   </div>
 {% endblock %}
 

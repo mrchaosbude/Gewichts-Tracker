@@ -1,15 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Session hinzufügen für {{ exercise.name }}{% endblock %}
+{% block title %}Satz hinzufügen{% endblock %}
 
 {% block extra_head %}
   <style>
     .rest-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.85);
       color: #fff;
       display: flex;
@@ -22,38 +19,53 @@
 {% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Session hinzufügen für "{{ exercise.name }}"</h2>
-    <form method="POST">
-      {{ form.hidden_tag() }}
-      <div class="form-group">
-        {{ form.repetitions.label }} {{ form.repetitions(class="form-control", pattern="\\d*") }}
-      </div>
-      <div class="form-group">
-        {{ form.weight.label }} {{ form.weight(class="form-control", pattern="\\d*") }}
-      </div>
-      <div class="form-group">
-        {{ form.perceived_exertion.label }} {{ form.perceived_exertion(class="form-control", pattern="\\d*") }}
-      </div>
-      <div class="form-group">
-        {{ form.notes.label }} {{ form.notes(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.submit(class="btn btn-primary btn-block") }}
-      </div>
-    </form>
-    <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="btn btn-secondary btn-block">Zurück</a>
+  <div class="page-wrap">
+    <h2 class="page-title">{{ exercise.name }}</h2>
+    {% if exercise.description %}
+      <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">{{ exercise.description }}</p>
+    {% endif %}
 
-    <div class="mt-4">
-      <label for="restTime">Pause (Sekunden)</label>
-      <div class="input-group">
-        <input type="number" id="restTime" class="form-control" value="60" min="1">
-        <div class="input-group-append">
-          <button id="startRest" type="button" class="btn btn-info">Pause starten</button>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-row">
+          <div class="form-group col-6">
+            {{ form.weight.label(class="small font-weight-bold") }}
+            {{ form.weight(class="form-control", pattern="\\d*", placeholder="kg") }}
+          </div>
+          <div class="form-group col-6">
+            {{ form.repetitions.label(class="small font-weight-bold") }}
+            {{ form.repetitions(class="form-control", pattern="\\d*", placeholder="Wdh") }}
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-4">
+            {{ form.perceived_exertion.label(class="small font-weight-bold") }}
+            {{ form.perceived_exertion(class="form-control", pattern="\\d*", placeholder="1-10") }}
+          </div>
+          <div class="form-group col-8">
+            {{ form.notes.label(class="small font-weight-bold") }}
+            {{ form.notes(class="form-control", placeholder="Optional...") }}
+          </div>
+        </div>
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </form>
+    </div>
+
+    <!-- Pause-Timer -->
+    <div class="s-card mt-2">
+      <div class="section-label mb-2">Pause-Timer</div>
+      <div class="form-row align-items-end">
+        <div class="col-7">
+          <input type="number" id="restTime" class="form-control" value="60" min="1" placeholder="Sekunden">
+        </div>
+        <div class="col-5">
+          <button id="startRest" type="button" class="btn btn-info btn-block">Pause starten</button>
         </div>
       </div>
-      <div id="countdown" class="mt-2 font-weight-bold text-center"></div>
     </div>
+
+    <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="back-link">&larr; Zurück</a>
   </div>
 
   <div id="restOverlay" class="rest-overlay d-none">

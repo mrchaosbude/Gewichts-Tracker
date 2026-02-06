@@ -3,31 +3,32 @@
 {% block title %}Vorlagen{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Verfügbare Template Trainingspläne</h2>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Titel</th>
-          <th>Beschreibung</th>
-          <th>Aktion</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for tpl in templates %}
-          <tr>
-            <td>{{ tpl.title }}</td>
-            <td>{{ tpl.description }}</td>
-            <td>
-              <a href="{{ url_for('view_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Ansehen</a>
-              <form action="{{ url_for('add_template_to_account', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Diese Vorlage zu deinem Konto hinzufügen?');">
-                <button type="submit" class="btn btn-success btn-sm">Hinzufügen</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+  <div class="page-wrap">
+    <h2 class="page-title">Vorlagen</h2>
+
+    {% if templates %}
+    <div class="section-label">Verfügbare Trainingspläne</div>
+    {% for tpl in templates %}
+    <div class="s-card" style="display:flex; align-items:center; gap:0.75rem;">
+      <div style="width:40px; height:40px; border-radius:0.6rem; background:linear-gradient(135deg,#007bff,#0056b3); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.1rem; flex-shrink:0;">
+        {{ tpl.title[0]|upper }}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:0.95rem;">{{ tpl.title }}</div>
+        {% if tpl.description %}<div class="text-muted" style="font-size:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tpl.description }}</div>{% endif %}
+      </div>
+      <div style="display:flex; gap:0.4rem; flex-shrink:0;">
+        <a href="{{ url_for('view_template_plan', template_plan_id=tpl.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.75rem;">Ansehen</a>
+        <form action="{{ url_for('add_template_to_account', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Diese Vorlage zu deinem Konto hinzufügen?');">
+          <button type="submit" class="btn btn-success btn-sm py-0" style="font-size:0.75rem;">+ Hinzufügen</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="s-card text-center text-muted" style="font-size:0.9rem;">Keine Vorlagen verfügbar.</div>
+    {% endif %}
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}

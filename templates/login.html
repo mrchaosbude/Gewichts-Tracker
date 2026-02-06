@@ -2,25 +2,48 @@
 
 {% block title %}Login{% endblock %}
 
+{% block extra_head %}
+  <style>
+    .login-wrap {
+      max-width: 400px;
+      margin: 2rem auto;
+      padding: 0 15px;
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .login-header h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Login</h2>
-    <form method="POST">
-      {{ form.hidden_tag() }}
-      <div class="form-group">
-        {{ form.username.label }} {{ form.username(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.password.label }} {{ form.password(class="form-control") }}
-      </div>
-      <div class="form-group form-check">
-        {{ form.remember(class="form-check-input") }}
-        {{ form.remember.label(class="form-check-label") }}
-      </div>
-      <div class="form-group">
+  <div class="login-wrap">
+    <div class="login-header">
+      <h2>Willkommen zurück</h2>
+      <p class="text-muted" style="font-size:0.9rem;">Melde dich an, um fortzufahren</p>
+    </div>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.username.label(class="small font-weight-bold") }}
+          {{ form.username(class="form-control", placeholder="Benutzername") }}
+        </div>
+        <div class="form-group">
+          {{ form.password.label(class="small font-weight-bold") }}
+          {{ form.password(class="form-control", placeholder="Passwort") }}
+        </div>
+        <div class="form-group form-check">
+          {{ form.remember(class="form-check-input") }}
+          {{ form.remember.label(class="form-check-label small") }}
+        </div>
         {{ form.submit(class="btn btn-primary btn-block") }}
-      </div>
-    </form>
-    <p>Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
+      </form>
+    </div>
+    <p class="text-center mt-3" style="font-size:0.9rem;">Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
   </div>
 {% endblock %}

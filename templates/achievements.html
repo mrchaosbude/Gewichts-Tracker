@@ -4,40 +4,31 @@
 
 {% block extra_head %}
   <style>
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
     .badge-card {
       text-align: center;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      margin-bottom: 1rem;
+      padding: 1rem 0.5rem;
+      border-radius: 0.75rem;
       transition: transform 0.2s;
     }
-    .badge-card:hover {
-      transform: scale(1.03);
-    }
+    .badge-card:hover { transform: scale(1.03); }
     .badge-card.earned {
       background: linear-gradient(135deg, #ffd700 0%, #ffec80 100%);
       border: 2px solid #daa520;
       color: #333;
     }
     .badge-card.locked {
-      background: #e9ecef;
+      background: #f0f0f0;
       border: 2px solid #dee2e6;
       color: #999;
     }
-    .badge-icon {
-      font-size: 2.5rem;
-      margin-bottom: 0.5rem;
-    }
-    .badge-card h6 {
-      margin-bottom: 0.25rem;
-      font-weight: 700;
-    }
-    .badge-card .badge-desc {
-      font-size: 0.8rem;
-    }
-    .progress-summary {
-      font-size: 0.9rem;
-    }
+    .badge-icon { font-size: 2rem; margin-bottom: 0.3rem; }
+    .badge-card h6 { margin-bottom: 0.15rem; font-weight: 700; font-size: 0.85rem; }
+    .badge-card .badge-desc { font-size: 0.7rem; }
     [data-theme="dark"] .badge-card.earned {
       background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%);
       border-color: #daa520;
@@ -48,70 +39,71 @@
       border-color: #444;
       color: #666;
     }
+
+    @media (max-width: 359px) {
+      .badge-grid { grid-template-columns: 1fr; }
+      .badge-icon { font-size: 1.6rem; }
+      .badge-card { padding: 0.75rem 0.4rem; }
+    }
+    @media (min-width: 768px) {
+      .badge-grid { grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+      .badge-card { padding: 1.25rem 0.75rem; }
+      .badge-icon { font-size: 2.4rem; }
+      .badge-card h6 { font-size: 0.95rem; }
+      .badge-card .badge-desc { font-size: 0.8rem; }
+    }
+    @media (min-width: 1024px) {
+      .badge-grid { grid-template-columns: repeat(4, 1fr); }
+      .badge-card { border-radius: 1rem; }
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-3">Achievements</h2>
+  <div class="page-wrap">
+    <h2 class="page-title">Achievements</h2>
 
-    <div class="row text-center mb-4">
-      <div class="col-4">
-        <div class="card shadow-sm">
-          <div class="card-body py-2">
-            <div class="small text-muted">Freigeschaltet</div>
-            <h5 class="mb-0">{{ earned|length }} / {{ earned|length + locked|length }}</h5>
-          </div>
-        </div>
+    <div class="stat-row cols-3">
+      <div class="stat-box purple">
+        <div class="val">{{ earned|length }}/{{ earned|length + locked|length }}</div>
+        <div class="lbl">Erreicht</div>
       </div>
-      <div class="col-4">
-        <div class="card shadow-sm">
-          <div class="card-body py-2">
-            <div class="small text-muted">Sätze</div>
-            <h5 class="mb-0">{{ total_sessions }}</h5>
-          </div>
-        </div>
+      <div class="stat-box blue">
+        <div class="val">{{ total_sessions }}</div>
+        <div class="lbl">Sätze</div>
       </div>
-      <div class="col-4">
-        <div class="card shadow-sm">
-          <div class="card-body py-2">
-            <div class="small text-muted">Trainingstage</div>
-            <h5 class="mb-0">{{ training_days }}</h5>
-          </div>
-        </div>
+      <div class="stat-box green">
+        <div class="val">{{ training_days }}</div>
+        <div class="lbl">Tage</div>
       </div>
     </div>
 
     {% if earned %}
-    <h4 class="mb-3">Freigeschaltet</h4>
-    <div class="row">
+    <div class="section-label">Freigeschaltet</div>
+    <div class="badge-grid mb-3">
       {% for badge in earned %}
-      <div class="col-6 col-md-4 col-lg-3">
-        <div class="badge-card earned">
-          <div class="badge-icon">&#127942;</div>
-          <h6>{{ badge.name }}</h6>
-          <div class="badge-desc">{{ badge.description }}</div>
-        </div>
+      <div class="badge-card earned">
+        <div class="badge-icon">&#127942;</div>
+        <h6>{{ badge.name }}</h6>
+        <div class="badge-desc">{{ badge.description }}</div>
       </div>
       {% endfor %}
     </div>
     {% endif %}
 
     {% if locked %}
-    <h4 class="mb-3 mt-2">Noch gesperrt</h4>
-    <div class="row">
+    <div class="section-label">Noch gesperrt</div>
+    <div class="badge-grid">
       {% for badge in locked %}
-      <div class="col-6 col-md-4 col-lg-3">
-        <div class="badge-card locked">
-          <div class="badge-icon">&#128274;</div>
-          <h6>{{ badge.name }}</h6>
-          <div class="badge-desc">{{ badge.description }}</div>
-        </div>
+      <div class="badge-card locked">
+        <div class="badge-icon">&#128274;</div>
+        <h6>{{ badge.name }}</h6>
+        <div class="badge-desc">{{ badge.description }}</div>
       </div>
       {% endfor %}
     </div>
     {% endif %}
 
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}

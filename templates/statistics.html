@@ -2,128 +2,113 @@
 
 {% block title %}Statistiken{% endblock %}
 
+{% block extra_head %}
+  <style>
+    .chart-wrap { height: 220px; }
+    .chart-wrap-lg { height: 260px; }
+    @media (min-width: 768px) {
+      .chart-wrap { height: 300px; }
+      .chart-wrap-lg { height: 320px; }
+    }
+    @media (min-width: 1024px) {
+      .chart-wrap { height: 360px; }
+      .chart-wrap-lg { height: 380px; }
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Statistiken</h2>
+  <div class="page-wrap">
+    <h2 class="page-title">Statistiken</h2>
 
     <!-- Wochenvergleich -->
-    <div class="card mb-4">
-      <div class="card-header"><strong>Wochenvergleich</strong></div>
-      <div class="card-body">
-        <div class="row text-center mb-3">
-          <div class="col-6">
-            <div class="small text-muted">Letzte Woche</div>
-            <h5>{{ last_week_sets }} Sätze</h5>
-            <div class="text-muted">{{ last_week_volume }} kg Volumen</div>
-          </div>
-          <div class="col-6">
-            <div class="small text-muted">Diese Woche</div>
-            <h5>{{ this_week_sets }} Sätze</h5>
-            <div class="text-muted">{{ this_week_volume }} kg Volumen</div>
-          </div>
-        </div>
-        <div class="text-center mb-3">
-          {% if volume_diff > 0 %}
-            <span class="badge badge-success p-2">+{{ volume_diff }} kg Volumen / +{{ sets_diff }} Sätze</span>
-          {% elif volume_diff < 0 %}
-            <span class="badge badge-danger p-2">{{ volume_diff }} kg Volumen / {{ sets_diff }} Sätze</span>
-          {% else %}
-            <span class="badge badge-secondary p-2">Gleiches Volumen</span>
-          {% endif %}
-        </div>
-        {% if exercise_comparison %}
-        <div class="table-responsive">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>Übung</th>
-                <th class="text-center">Letzte Wo.</th>
-                <th class="text-center">Diese Wo.</th>
-                <th class="text-center">Diff.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for ec in exercise_comparison %}
-              <tr>
-                <td>{{ ec.name }}</td>
-                <td class="text-center">{{ ec.last_week.max_weight }}kg &times; {{ ec.last_week.sets }}</td>
-                <td class="text-center">{{ ec.this_week.max_weight }}kg &times; {{ ec.this_week.sets }}</td>
-                <td class="text-center">
-                  {% if ec.weight_diff > 0 %}
-                    <span class="text-success">+{{ ec.weight_diff }}kg</span>
-                  {% elif ec.weight_diff < 0 %}
-                    <span class="text-danger">{{ ec.weight_diff }}kg</span>
-                  {% else %}
-                    <span class="text-muted">=</span>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% endif %}
+    <div class="section-label">Wochenvergleich</div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="lbl">Letzte Woche</div>
+        <div class="val" style="font-size:1.2rem;">{{ last_week_sets }}</div>
+        <div class="lbl">Sätze</div>
+        <div class="small text-muted">{{ last_week_volume }} kg</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Diese Woche</div>
+        <div class="val" style="font-size:1.2rem;">{{ this_week_sets }}</div>
+        <div class="lbl">Sätze</div>
+        <div class="small text-muted">{{ this_week_volume }} kg</div>
       </div>
     </div>
+    <div class="text-center mb-3">
+      {% if volume_diff > 0 %}
+        <span class="badge badge-success p-2">+{{ volume_diff }} kg / +{{ sets_diff }} Sätze</span>
+      {% elif volume_diff < 0 %}
+        <span class="badge badge-danger p-2">{{ volume_diff }} kg / {{ sets_diff }} Sätze</span>
+      {% else %}
+        <span class="badge badge-secondary p-2">Gleiches Volumen</span>
+      {% endif %}
+    </div>
 
-    <!-- Muskelgruppen-Volumen -->
-    <div class="card mb-4">
-      <div class="card-header"><strong>Volumen pro Muskelgruppe</strong></div>
-      <div class="card-body">
-        {% if muscle_labels %}
-          <div style="height: 300px;">
-            <canvas id="muscleChart"></canvas>
-          </div>
-        {% else %}
-          <p class="text-muted">Noch keine Daten vorhanden. Weise deinen Übungen Muskelgruppen zu.</p>
-        {% endif %}
+    {% if exercise_comparison %}
+    <div class="s-card s-card-flush">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+          <thead>
+            <tr>
+              <th>Übung</th>
+              <th class="text-center">Vorher</th>
+              <th class="text-center">Jetzt</th>
+              <th class="text-center">+/-</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ec in exercise_comparison %}
+            <tr>
+              <td>{{ ec.name }}</td>
+              <td class="text-center text-muted">{{ ec.last_week.max_weight }}kg</td>
+              <td class="text-center">{{ ec.this_week.max_weight }}kg</td>
+              <td class="text-center">
+                {% if ec.weight_diff > 0 %}
+                  <span class="text-success font-weight-bold">+{{ ec.weight_diff }}</span>
+                {% elif ec.weight_diff < 0 %}
+                  <span class="text-danger font-weight-bold">{{ ec.weight_diff }}</span>
+                {% else %}
+                  <span class="text-muted">=</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+    </div>
+    {% endif %}
+
+    <!-- Muskelgruppen -->
+    <div class="section-label mt-4">Volumen pro Muskelgruppe</div>
+    <div class="s-card">
+      {% if muscle_labels %}
+        <div class="chart-wrap-lg">
+          <canvas id="muscleChart"></canvas>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0" style="font-size:0.9rem;">Weise deinen Übungen Muskelgruppen zu, um die Verteilung zu sehen.</p>
+      {% endif %}
     </div>
 
     <!-- Trainingsfrequenz -->
-    <div class="card mb-4">
-      <div class="card-header"><strong>Trainingsfrequenz (letzte 12 Wochen)</strong></div>
-      <div class="card-body">
-        <div style="height: 250px;">
-          <canvas id="frequencyChart"></canvas>
-        </div>
-        <div class="table-responsive mt-3">
-          <table class="table table-sm text-center">
-            <thead>
-              <tr>
-                <th>Woche ab</th>
-                {% for f in frequency_data %}
-                  <th>{{ f.label }}</th>
-                {% endfor %}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="text-left"><strong>Tage</strong></td>
-                {% for f in frequency_data %}
-                  <td>{{ f.days }}</td>
-                {% endfor %}
-              </tr>
-              <tr>
-                <td class="text-left"><strong>Sätze</strong></td>
-                {% for f in frequency_data %}
-                  <td>{{ f.sets }}</td>
-                {% endfor %}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="section-label mt-3">Trainingsfrequenz (12 Wochen)</div>
+    <div class="s-card">
+      <div class="chart-wrap">
+        <canvas id="frequencyChart"></canvas>
       </div>
     </div>
 
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    // Muskelgruppen-Chart
     {% if muscle_labels %}
     const muscleCtx = document.getElementById('muscleChart').getContext('2d');
     const colors = [
@@ -155,7 +140,6 @@
     });
     {% endif %}
 
-    // Trainingsfrequenz-Chart
     const freqCtx = document.getElementById('frequencyChart').getContext('2d');
     const freqData = {{ frequency_data|tojson }};
     new Chart(freqCtx, {

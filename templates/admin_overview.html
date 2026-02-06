@@ -3,58 +3,50 @@
 {% block title %}Admin – Benutzerübersicht{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Admin – Benutzerübersicht</h2>
-    <a href="{{ url_for('admin_footer_pages') }}" class="btn btn-info mb-3 btn-block">Footer-Seiten verwalten</a>
-    <a href="{{ url_for('admin_footer_links') }}" class="btn btn-info mb-3 btn-block">Footer-Links verwalten</a>
+  <div class="page-wrap" style="max-width:720px;">
+    <h2 class="page-title">Admin</h2>
 
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Benutzername</th>
-          <th>Registriert am</th>
-          <th>Letzter Login</th>
-          <th>Trainer</th>
-          <th>Aktionen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for user in users %}
-          <tr>
-            <td>{{ user.username }}</td>
-            <td>{{ user.registration_date.strftime('%d.%m.%Y %H:%M') }}</td>
-            <td>
-              {% if user.last_login %}
-                {{ user.last_login.strftime('%d.%m.%Y %H:%M') }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td>{{ 'Ja' if user.is_trainer else 'Nein' }}</td>
-            <td>
-              {% if not user.is_trainer %}
-                <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
-                  {{ set_trainer_form.hidden_tag() }}
-                  {{ set_trainer_form.submit(class="btn btn-secondary btn-sm", value='Trainer setzen') }}
-                </form>
-              {% else %}
-                <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
-                  {{ remove_trainer_form.hidden_tag() }}
-                  {{ remove_trainer_form.submit(class="btn btn-secondary btn-sm", value='Trainer entfernen') }}
-                </form>
-              {% endif %}
-              <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-primary btn-sm">Passwort ändern</a>
-              {% if user.id != current_user.id %}
-                <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
-                  {{ delete_user_form.hidden_tag() }}
-                  {{ delete_user_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
-                </form>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+      <a href="{{ url_for('admin_footer_pages') }}" class="btn btn-outline-primary btn-block btn-sm">Footer-Seiten</a>
+      <a href="{{ url_for('admin_footer_links') }}" class="btn btn-outline-primary btn-block btn-sm">Footer-Links</a>
+    </div>
+
+    <div class="section-label">Benutzer ({{ users|length }})</div>
+    {% for user in users %}
+    <div class="s-card" style="font-size:0.85rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+        <div>
+          <strong>{{ user.username }}</strong>
+          {% if user.is_trainer %}<span class="badge badge-info ml-1">Trainer</span>{% endif %}
+        </div>
+        <span class="text-muted" style="font-size:0.75rem;">{{ user.registration_date.strftime('%d.%m.%Y') }}</span>
+      </div>
+      <div class="text-muted mb-2" style="font-size:0.75rem;">
+        Letzter Login: {% if user.last_login %}{{ user.last_login.strftime('%d.%m.%Y %H:%M') }}{% else %}-{% endif %}
+      </div>
+      <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+        {% if not user.is_trainer %}
+          <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+            {{ set_trainer_form.hidden_tag() }}
+            {{ set_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0", value='Trainer setzen', style="font-size:0.7rem;") }}
+          </form>
+        {% else %}
+          <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+            {{ remove_trainer_form.hidden_tag() }}
+            {{ remove_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0", value='Trainer entfernen', style="font-size:0.7rem;") }}
+          </form>
+        {% endif %}
+        <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">Passwort</a>
+        {% if user.id != current_user.id %}
+          <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
+            {{ delete_user_form.hidden_tag() }}
+            {{ delete_user_form.submit(class="btn btn-outline-danger btn-sm py-0", value='Löschen', style="font-size:0.7rem;") }}
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}

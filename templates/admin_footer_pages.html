@@ -3,46 +3,46 @@
 {% block title %}Admin – Footer-Seiten{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Footer-Seiten verwalten</h2>
-    <form method="POST" class="mb-3">
-      {{ form.hidden_tag() }}
-      <div class="form-row">
-        <div class="col">
-          {{ form.title.label }} {{ form.title(class="form-control") }}
+  <div class="page-wrap">
+    <h2 class="page-title">Footer-Seiten</h2>
+
+    <div class="s-card mb-3">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.title.label(class="small font-weight-bold") }} {{ form.title(class="form-control") }}
         </div>
-        <div class="col">
-          {{ form.content.label }} {{ form.content(class="form-control", rows=4) }}
+        <div class="form-group">
+          {{ form.content.label(class="small font-weight-bold") }} {{ form.content(class="form-control", rows=4) }}
         </div>
-        <div class="col-auto">
-          {{ form.submit(class="btn btn-primary mt-4") }}
-        </div>
-      </div>
-    </form>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Text</th>
-          <th>Vorschau</th>
-          <th>Aktionen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for page in pages %}
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </form>
+    </div>
+
+    {% if pages %}
+    <div class="section-label">Vorhandene Seiten ({{ pages|length }})</div>
+    <div class="s-card s-card-flush">
+      <table class="table table-sm mb-0" style="font-size:0.85rem;">
+        <thead><tr><th>Titel</th><th>Vorschau</th><th></th></tr></thead>
+        <tbody>
+          {% for page in pages %}
           <tr>
-            <td>{{ page.title }}</td>
-            <td>{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
-            <td>
-              <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
+            <td><strong>{{ page.title }}</strong></td>
+            <td class="text-muted" style="font-size:0.8rem;">{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
+            <td class="text-right" style="white-space:nowrap;">
+              <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">Edit</a>
               <form action="{{ url_for('delete_footer_page', page_id=page.id) }}" method="POST" style="display:inline;">
                 {{ delete_form.hidden_tag() }}
-                {{ delete_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
+                {{ delete_form.submit(class="btn btn-outline-danger btn-sm py-0", value='X', style="font-size:0.7rem;") }}
               </form>
             </td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="{{ url_for('admin_overview') }}" class="btn btn-secondary btn-block">Zurück</a>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('admin_overview') }}" class="back-link">&larr; Zurück zur Übersicht</a>
   </div>
 {% endblock %}

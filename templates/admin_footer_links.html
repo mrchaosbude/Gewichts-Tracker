@@ -3,46 +3,46 @@
 {% block title %}Admin – Footer Links{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Footer Links verwalten</h2>
-    <form method="POST" class="mb-3">
-      {{ form.hidden_tag() }}
-      <div class="form-row">
-        <div class="col">
-          {{ form.title.label }} {{ form.title(class="form-control") }}
+  <div class="page-wrap">
+    <h2 class="page-title">Footer Links</h2>
+
+    <div class="s-card mb-3">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.title.label(class="small font-weight-bold") }} {{ form.title(class="form-control") }}
         </div>
-        <div class="col">
-          {{ form.url.label }} {{ form.url(class="form-control") }}
+        <div class="form-group">
+          {{ form.url.label(class="small font-weight-bold") }} {{ form.url(class="form-control") }}
         </div>
-        <div class="col-auto">
-          {{ form.submit(class="btn btn-primary mt-4") }}
-        </div>
-      </div>
-    </form>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Text</th>
-          <th>URL</th>
-          <th>Aktionen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for link in links %}
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </form>
+    </div>
+
+    {% if links %}
+    <div class="section-label">Vorhandene Links ({{ links|length }})</div>
+    <div class="s-card s-card-flush">
+      <table class="table table-sm mb-0" style="font-size:0.85rem;">
+        <thead><tr><th>Text</th><th>URL</th><th></th></tr></thead>
+        <tbody>
+          {% for link in links %}
           <tr>
             <td>{{ link.title }}</td>
-            <td>{{ link.url }}</td>
-            <td>
-              <a href="{{ url_for('edit_footer_link', link_id=link.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
+            <td class="text-muted" style="font-size:0.8rem; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ link.url }}</td>
+            <td class="text-right" style="white-space:nowrap;">
+              <a href="{{ url_for('edit_footer_link', link_id=link.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">Edit</a>
               <form action="{{ url_for('delete_footer_link', link_id=link.id) }}" method="POST" style="display:inline;">
                 {{ delete_form.hidden_tag() }}
-                {{ delete_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
+                {{ delete_form.submit(class="btn btn-outline-danger btn-sm py-0", value='X', style="font-size:0.7rem;") }}
               </form>
             </td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="{{ url_for('admin_overview') }}" class="btn btn-secondary btn-block">Zurück</a>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('admin_overview') }}" class="back-link">&larr; Zurück zur Übersicht</a>
   </div>
 {% endblock %}

@@ -3,22 +3,32 @@
 {% block title %}Vorlage: {{ template_plan.title }}{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-3">{{ template_plan.title }}</h2>
-    <p>{{ template_plan.description }}</p>
-    <h4>Enthaltene Übungen</h4>
-    <ul class="list-group mb-4">
-      {% for exercise in template_plan.exercises %}
-        <li class="list-group-item">
-          <strong>{{ exercise.name }}</strong>
-          {% if exercise.description %}
-            <p class="mb-0 small text-muted">{{ exercise.description }}</p>
-          {% endif %}
-        </li>
-      {% else %}
-        <li class="list-group-item">Keine Übungen vorhanden.</li>
-      {% endfor %}
-    </ul>
-    <a href="{{ url_for('template_plans') }}" class="btn btn-secondary btn-block">Zurück zu Vorlagen</a>
+  <div class="page-wrap">
+    <h2 class="page-title">{{ template_plan.title }}</h2>
+    {% if template_plan.description %}
+    <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">{{ template_plan.description }}</p>
+    {% endif %}
+
+    <div class="section-label">Enthaltene Übungen ({{ template_plan.exercises|length }})</div>
+    {% if template_plan.exercises %}
+    <div class="s-card s-card-flush">
+      <table class="table table-sm mb-0" style="font-size:0.85rem;">
+        <tbody>
+          {% for exercise in template_plan.exercises %}
+          <tr>
+            <td>
+              <strong>{{ exercise.name }}</strong>
+              {% if exercise.description %}<div class="text-muted" style="font-size:0.8rem;">{{ exercise.description }}</div>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="s-card text-center text-muted" style="font-size:0.9rem;">Keine Übungen vorhanden.</div>
+    {% endif %}
+
+    <a href="{{ url_for('template_plans') }}" class="back-link">&larr; Zurück zu Vorlagen</a>
   </div>
 {% endblock %}

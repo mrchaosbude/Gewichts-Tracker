@@ -4,128 +4,348 @@
 
 {% block extra_head %}
   <style>
-    .session-list {
-      font-size: 0.9rem;
-    }
-
+    /* ---- Exercise stats toggle ---- */
     .exercise-stats-toggle {
       margin-bottom: 1rem;
     }
-
     .exercise-stats-toggle summary {
       display: block;
       cursor: pointer;
-      padding: 0.75rem 1.25rem;
-      margin-bottom: 0;
-      color: #495057;
-      background-color: #fff;
-      border: 1px solid #6c757d;
-      border-radius: 0.25rem;
+      padding: 0.65rem 1rem;
+      font-size: 0.85rem;
       font-weight: 600;
+      color: #495057;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 0.75rem;
       list-style: none;
       position: relative;
     }
-
-    .exercise-stats-toggle summary::-webkit-details-marker {
-      display: none;
-    }
-
+    .exercise-stats-toggle summary::-webkit-details-marker { display: none; }
     .exercise-stats-toggle summary::after {
       content: '\25bc';
       position: absolute;
       right: 1rem;
+      font-size: 0.75rem;
       transition: transform 0.2s ease;
     }
-
-    .exercise-stats-toggle[open] summary::after {
-      transform: rotate(180deg);
-    }
-
+    .exercise-stats-toggle[open] summary::after { transform: rotate(180deg); }
     .exercise-stats-toggle summary:focus {
       outline: none;
-      box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+      box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.15);
     }
-
     .exercise-stats-toggle[open] summary {
       border-bottom-left-radius: 0;
       border-bottom-right-radius: 0;
     }
-
     .exercise-stats-body {
-      border: 1px solid #6c757d;
+      border: 1px solid #dee2e6;
       border-top: none;
-      border-bottom-left-radius: 0.25rem;
-      border-bottom-right-radius: 0.25rem;
-      padding: 1rem;
-      background-color: #fff;
+      border-bottom-left-radius: 0.75rem;
+      border-bottom-right-radius: 0.75rem;
+      padding: 0.75rem;
+      background: #fff;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
+    .exercise-stats-body table { font-size: 0.78rem; margin-bottom: 0; }
 
-    /* Dark Mode für Übungsstatistik */
     [data-theme="dark"] .exercise-stats-toggle summary {
       color: #eaeaea;
-      background-color: #16213e;
-      border-color: #444;
+      background: #16213e;
+      border-color: #333;
     }
-
     [data-theme="dark"] .exercise-stats-body {
-      background-color: #16213e;
-      border-color: #444;
+      background: #16213e;
+      border-color: #333;
     }
 
-    /* Superset Farben */
-    .border-left-superset { border-left: 4px solid #6c757d !important; }
-    .superset-0 { border-left-color: #007bff !important; }
-    .superset-1 { border-left-color: #28a745 !important; }
-    .superset-2 { border-left-color: #ffc107 !important; }
-    .superset-3 { border-left-color: #dc3545 !important; }
-    .superset-4 { border-left-color: #17a2b8 !important; }
+    /* ---- Superset accent colours ---- */
+    .superset-stripe { border-left: 4px solid #6c757d; }
+    .superset-stripe.ss-0 { border-left-color: #007bff; }
+    .superset-stripe.ss-1 { border-left-color: #28a745; }
+    .superset-stripe.ss-2 { border-left-color: #ffc107; }
+    .superset-stripe.ss-3 { border-left-color: #dc3545; }
+    .superset-stripe.ss-4 { border-left-color: #17a2b8; }
 
-    .badge-superset-0 { background-color: #007bff; color: #fff; }
-    .badge-superset-1 { background-color: #28a745; color: #fff; }
-    .badge-superset-2 { background-color: #ffc107; color: #212529; }
-    .badge-superset-3 { background-color: #dc3545; color: #fff; }
-    .badge-superset-4 { background-color: #17a2b8; color: #fff; }
+    .badge-ss { display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; vertical-align: middle; }
+    .badge-ss-0 { background: #007bff; color: #fff; }
+    .badge-ss-1 { background: #28a745; color: #fff; }
+    .badge-ss-2 { background: #ffc107; color: #212529; }
+    .badge-ss-3 { background: #dc3545; color: #fff; }
+    .badge-ss-4 { background: #17a2b8; color: #fff; }
+
+    /* ---- Compact action row ---- */
+    .plan-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .plan-actions .act-btn {
+      flex: 1;
+      text-align: center;
+      padding: 0.5rem 0.25rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+    .act-add { background: #28a745; color: #fff !important; }
+    .act-add:hover { background: #218838; color: #fff !important; text-decoration: none; }
+    .act-print { background: #e9ecef; color: #495057 !important; }
+    .act-print:hover { background: #dee2e6; color: #495057 !important; text-decoration: none; }
+    [data-theme="dark"] .act-add { background: #28a745; color: #fff !important; }
+    [data-theme="dark"] .act-add:hover { background: #218838; color: #fff !important; }
+    [data-theme="dark"] .act-print { background: #0f3460; color: #eaeaea !important; }
+    [data-theme="dark"] .act-print:hover { background: #1a4a7a; color: #eaeaea !important; }
+
+    /* ---- Header row ---- */
+    .plan-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .plan-header .del-btn {
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.4rem;
+      border: 1px solid #dc3545;
+      background: transparent;
+      color: #dc3545;
+      cursor: pointer;
+    }
+    .plan-header .del-btn:hover { background: #dc3545; color: #fff; }
+
+    .plan-desc {
+      font-size: 0.88rem;
+      color: #6c757d;
+      margin-bottom: 0.75rem;
+    }
+    [data-theme="dark"] .plan-desc { color: #a0a0a0; }
+
+    /* ---- Share card ---- */
+    .share-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .share-row input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.78rem;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.4rem;
+      background: #f8f9fa;
+      color: #495057;
+    }
+    [data-theme="dark"] .share-row input[type="text"] {
+      background: #0f3460;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    .share-row .sm-btn {
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35rem 0.65rem;
+      border-radius: 0.4rem;
+      border: none;
+      cursor: pointer;
+    }
+    .sm-btn-copy { background: #28a745; color: #fff; }
+    .sm-btn-copy:hover { background: #218838; }
+    .sm-btn-unshr { background: transparent; border: 1px solid #dc3545; color: #dc3545; }
+    .sm-btn-unshr:hover { background: #dc3545; color: #fff; }
+    .sm-btn-share { background: transparent; border: 1px solid #007bff; color: #007bff; }
+    .sm-btn-share:hover { background: #007bff; color: #fff; }
+
+    /* ---- Exercise card ---- */
+    .ex-card {
+      position: relative;
+    }
+    .ex-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    .ex-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .ex-desc {
+      font-size: 0.78rem;
+      color: #6c757d;
+      margin-top: 2px;
+    }
+    [data-theme="dark"] .ex-desc { color: #a0a0a0; }
+
+    .ex-controls {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    .ex-controls .arrow-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #dee2e6;
+      border-radius: 0.35rem;
+      background: #f8f9fa;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #495057;
+      padding: 0;
+    }
+    .ex-controls .arrow-btn:hover { background: #e2e6ea; }
+    [data-theme="dark"] .ex-controls .arrow-btn {
+      background: #0f3460;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    [data-theme="dark"] .ex-controls .arrow-btn:hover { background: #1a4a7a; }
+
+    /* ---- Sessions inside card ---- */
+    .ex-sessions {
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: #495057;
+    }
+    [data-theme="dark"] .ex-sessions { color: #c0c0c0; }
+    .ex-sessions .sess {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #f0f0f0;
+      padding: 1px 0;
+    }
+    .ex-sessions .sess:last-child { border-bottom: none; }
+    [data-theme="dark"] .ex-sessions .sess { border-color: #2a2a4a; }
+    .sess-date { color: #6c757d; min-width: 72px; }
+    [data-theme="dark"] .sess-date { color: #a0a0a0; }
+    .sess-empty { color: #6c757d; font-style: italic; }
+    [data-theme="dark"] .sess-empty { color: #a0a0a0; }
+
+    /* ---- Superset form inline ---- */
+    .ss-form {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+    .ss-form input[type="number"] {
+      width: 72px;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.4rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.35rem;
+      background: #f8f9fa;
+      color: #495057;
+    }
+    [data-theme="dark"] .ss-form input[type="number"] {
+      background: #0f3460;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    .ss-form .ss-set-btn {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.25rem 0.55rem;
+      border-radius: 0.35rem;
+      border: 1px solid #6c757d;
+      background: transparent;
+      color: #6c757d;
+      cursor: pointer;
+    }
+    .ss-form .ss-set-btn:hover { background: #6c757d; color: #fff; }
+    [data-theme="dark"] .ss-form .ss-set-btn { border-color: #888; color: #ccc; }
+    [data-theme="dark"] .ss-form .ss-set-btn:hover { background: #6c757d; color: #fff; }
+
+    /* ---- Detail link ---- */
+    .ex-foot {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 0.5rem;
+    }
+    .ex-detail-link {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #007bff;
+      text-decoration: none;
+    }
+    .ex-detail-link:hover { text-decoration: underline; }
+    [data-theme="dark"] .ex-detail-link { color: #6eb5ff; }
+
+    /* ---- Empty state ---- */
+    .empty-hint {
+      text-align: center;
+      padding: 1.5rem 1rem;
+      font-size: 0.88rem;
+      color: #6c757d;
+    }
+    [data-theme="dark"] .empty-hint { color: #a0a0a0; }
   </style>
 {% endblock %}
 
 {% block content %}
-  <div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="mb-0">{{ training_plan.title }}</h2>
+  <div class="page-wrap">
+
+    {# ---- Plan header ---- #}
+    <div class="plan-header">
+      <h1 class="page-title" style="margin-bottom:0">{{ training_plan.title }}</h1>
       <form action="{{ url_for('delete_training_plan', training_plan_id=training_plan.id) }}" method="POST" onsubmit="return confirm('Trainingsplan wirklich löschen?');">
         {{ delete_plan_form.hidden_tag() }}
-        {{ delete_plan_form.submit(class="btn btn-danger btn-sm") }}
+        <button type="submit" class="del-btn">Löschen</button>
       </form>
     </div>
-    <p>{{ training_plan.description }}</p>
-    <div class="btn-group mb-3 btn-block" role="group">
-      <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success">Übung hinzufügen</a>
-      <a href="{{ url_for('print_training_plan', training_plan_id=training_plan.id) }}" class="btn btn-outline-secondary" target="_blank">Drucken / PDF</a>
+    {% if training_plan.description %}
+      <p class="plan-desc">{{ training_plan.description }}</p>
+    {% endif %}
+
+    {# ---- Action buttons ---- #}
+    <div class="plan-actions">
+      <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="act-btn act-add">+ Übung hinzufügen</a>
+      <a href="{{ url_for('print_training_plan', training_plan_id=training_plan.id) }}" class="act-btn act-print" target="_blank">Drucken / PDF</a>
     </div>
-    <div class="mb-3">
+
+    {# ---- Share ---- #}
+    <div class="s-card" style="padding:0.7rem 1rem; margin-bottom:1rem;">
       {% if training_plan.share_token %}
-        <div class="input-group input-group-sm mb-2">
-          <input type="text" class="form-control" readonly value="{{ request.url_root.rstrip('/') + url_for('copy_shared_plan', token=training_plan.share_token) }}" id="shareLink">
-          <div class="input-group-append">
-            <button class="btn btn-outline-success btn-sm" type="button" onclick="navigator.clipboard.writeText(document.getElementById('shareLink').value); this.textContent='Kopiert!';">Link kopieren</button>
-          </div>
+        <div class="share-row" style="margin-bottom:0.4rem;">
+          <input type="text" readonly value="{{ request.url_root.rstrip('/') + url_for('copy_shared_plan', token=training_plan.share_token) }}" id="shareLink">
+          <button type="button" class="sm-btn sm-btn-copy" onclick="navigator.clipboard.writeText(document.getElementById('shareLink').value); this.textContent='Kopiert!';">Link kopieren</button>
         </div>
-        <form action="{{ url_for('unshare_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+        <form action="{{ url_for('unshare_training_plan', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
           {{ delete_plan_form.hidden_tag() }}
-          <button type="submit" class="btn btn-outline-danger btn-sm">Teilen deaktivieren</button>
+          <button type="submit" class="sm-btn sm-btn-unshr">Teilen deaktivieren</button>
         </form>
       {% else %}
-        <form action="{{ url_for('share_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+        <form action="{{ url_for('share_training_plan', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
           {{ delete_plan_form.hidden_tag() }}
-          <button type="submit" class="btn btn-outline-primary btn-sm">Plan teilen</button>
+          <button type="submit" class="sm-btn sm-btn-share">Plan teilen</button>
         </form>
       {% endif %}
     </div>
+
     {% if exercise_overview %}
+
+      {# ---- Stats toggle ---- #}
       <details id="exerciseStatsToggle" class="exercise-stats-toggle">
         <summary>Übungsstatistiken</summary>
         <div class="exercise-stats-body">
-          <div class="table-responsive mb-4">
+          <div class="table-responsive">
             <table class="table table-sm table-striped">
               <thead>
                 <tr>
@@ -153,16 +373,16 @@
                     <td>
                       {% if summary.latest_session %}
                         {{ summary.latest_session.timestamp.strftime('%d.%m.%Y') }}<br>
-                        <span class="small text-muted">{{ summary.latest_session.weight }} kg × {{ summary.latest_session.repetitions }}</span>
+                        <span class="small text-muted">{{ summary.latest_session.weight }} kg &times; {{ summary.latest_session.repetitions }}</span>
                       {% else %}
-                        <span class="text-muted">–</span>
+                        <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if summary.total_sessions %}
                         {{ summary.total_volume|round(1) }} kg
                       {% else %}
-                        <span class="text-muted">–</span>
+                        <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
@@ -170,22 +390,22 @@
                         {{ personal_bests.max_weight.value }} kg
                         <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh</div>
                       {% else %}
-                        <span class="text-muted">–</span>
+                        <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if personal_bests.max_one_rm %}
                         {{ personal_bests.max_one_rm.value|round(1) }} kg
-                        <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }}</div>
+                        <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg &times; {{ personal_bests.max_one_rm.repetitions }}</div>
                       {% else %}
-                        <span class="text-muted">–</span>
+                        <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if summary.total_sessions %}
                         {{ summary.recent_volume_average|round(1) }} kg
                       {% else %}
-                        <span class="text-muted">–</span>
+                        <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                   </tr>
@@ -195,70 +415,79 @@
           </div>
         </div>
       </details>
-      <h3>Übungen</h3>
-      <ul class="list-group">
-        {% for item in exercise_overview %}
-          <li class="list-group-item {% if item.superset_group %}border-left-superset superset-{{ item.superset_group % 5 }}{% endif %}">
-            <div class="d-flex justify-content-between">
-              <div class="pr-3 flex-grow-1">
-                <div class="d-flex align-items-center flex-wrap">
-                  <strong>{{ item.exercise.name }}</strong>
-                  {% if item.superset_group %}
-                    <span class="badge badge-pill badge-superset-{{ item.superset_group % 5 }} ml-2">Superset {{ item.superset_group }}</span>
-                  {% endif %}
-                </div>
-                {% if item.exercise.description %}
-                  <p class="mb-2 small text-muted">{{ item.exercise.description }}</p>
-                {% endif %}
-                <div class="session-list">
-                  {% for session in item.recent_sessions %}
-                    <div>
-                      {{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen
-                    </div>
-                  {% else %}
-                    <div class="text-muted">Noch keine Einheiten erfasst.</div>
-                  {% endfor %}
-                </div>
-                <form action="{{ url_for('set_superset', training_plan_id=training_plan.id) }}" method="POST" class="form-inline mt-2">
+
+      {# ---- Exercise list ---- #}
+      <p class="section-label">Übungen</p>
+
+      {% for item in exercise_overview %}
+        <div class="s-card ex-card {% if item.superset_group %}superset-stripe ss-{{ item.superset_group % 5 }}{% endif %}">
+
+          {# Top row: name + reorder arrows #}
+          <div class="ex-top">
+            <div style="min-width:0">
+              <span class="ex-name">{{ item.exercise.name }}</span>
+              {% if item.superset_group %}
+                <span class="badge-ss badge-ss-{{ item.superset_group % 5 }}">Superset {{ item.superset_group }}</span>
+              {% endif %}
+              {% if item.exercise.description %}
+                <div class="ex-desc">{{ item.exercise.description }}</div>
+              {% endif %}
+            </div>
+            <div class="ex-controls">
+              {% if not loop.first %}
+                <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
                   {{ delete_plan_form.hidden_tag() }}
                   <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-                  <div class="input-group input-group-sm" style="max-width: 220px;">
-                    <input type="number" name="superset_group" class="form-control" placeholder="Superset #" min="0" max="99" value="{{ item.superset_group or '' }}">
-                    <div class="input-group-append">
-                      <button type="submit" class="btn btn-outline-secondary btn-sm">Setzen</button>
-                    </div>
-                  </div>
+                  <input type="hidden" name="direction" value="up">
+                  <button type="submit" class="arrow-btn" title="Nach oben">&uarr;</button>
                 </form>
-              </div>
-              <div class="d-flex flex-column align-items-end" style="min-width: 90px;">
-                <div class="btn-group btn-group-sm mb-1">
-                  {% if not loop.first %}
-                    <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
-                      {{ delete_plan_form.hidden_tag() }}
-                      <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-                      <input type="hidden" name="direction" value="up">
-                      <button type="submit" class="btn btn-outline-secondary btn-sm" title="Nach oben">&uarr;</button>
-                    </form>
-                  {% endif %}
-                  {% if not loop.last %}
-                    <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
-                      {{ delete_plan_form.hidden_tag() }}
-                      <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-                      <input type="hidden" name="direction" value="down">
-                      <button type="submit" class="btn btn-outline-secondary btn-sm" title="Nach unten">&darr;</button>
-                    </form>
-                  {% endif %}
-                </div>
-                <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="btn btn-info btn-sm btn-block">Details</a>
-              </div>
+              {% endif %}
+              {% if not loop.last %}
+                <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                  {{ delete_plan_form.hidden_tag() }}
+                  <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                  <input type="hidden" name="direction" value="down">
+                  <button type="submit" class="arrow-btn" title="Nach unten">&darr;</button>
+                </form>
+              {% endif %}
             </div>
-          </li>
-        {% endfor %}
-      </ul>
+          </div>
+
+          {# Recent sessions #}
+          <div class="ex-sessions">
+            {% for session in item.recent_sessions %}
+              <div class="sess">
+                <span class="sess-date">{{ session.timestamp.strftime('%d.%m.%y') }}</span>
+                <span>{{ session.weight }}&nbsp;kg &times; {{ session.repetitions }}</span>
+              </div>
+            {% else %}
+              <div class="sess-empty">Noch keine Einheiten erfasst.</div>
+            {% endfor %}
+          </div>
+
+          {# Superset form #}
+          <form action="{{ url_for('set_superset', training_plan_id=training_plan.id) }}" method="POST" class="ss-form">
+            {{ delete_plan_form.hidden_tag() }}
+            <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+            <input type="number" name="superset_group" placeholder="SS #" min="0" max="99" value="{{ item.superset_group or '' }}">
+            <button type="submit" class="ss-set-btn">Setzen</button>
+          </form>
+
+          {# Detail link #}
+          <div class="ex-foot">
+            <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="ex-detail-link">Details &rarr;</a>
+          </div>
+
+        </div>
+      {% endfor %}
+
     {% else %}
-      <div class="alert alert-info">Füge deinem Trainingsplan eine Übung hinzu, um Auswertungen zu sehen.</div>
+      <div class="s-card empty-hint">
+        Füge deinem Trainingsplan eine Übung hinzu, um Auswertungen zu sehen.
+      </div>
     {% endif %}
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück</a>
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">Zurück</a>
+
   </div>
 {% endblock %}
-

@@ -3,51 +3,41 @@
 {% block title %}Admin – Template Trainingspläne{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Admin – Template Trainingspläne</h2>
-    <div class="btn-group mb-3 btn-block" role="group">
-      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success">
-        Neuen Template erstellen
-      </a>
-      <a href="{{ url_for('import_template_plan') }}" class="btn btn-outline-success">
-        Aus Markdown importieren
-      </a>
+  <div class="page-wrap" style="max-width:720px;">
+    <h2 class="page-title">Template Pläne</h2>
+
+    <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+      <a href="{{ url_for('create_template_plan') }}" class="btn btn-success btn-block btn-sm">Neu erstellen</a>
+      <a href="{{ url_for('import_template_plan') }}" class="btn btn-outline-success btn-block btn-sm">Markdown Import</a>
     </div>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Titel</th>
-          <th>Beschreibung</th>
-          <th>Sichtbar</th>
-          <th>Aktionen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for tpl in templates %}
-          <tr>
-            <td>{{ tpl.title }}</td>
-            <td>{{ tpl.description }}</td>
-            <td>{{ 'Ja' if tpl.is_visible else 'Nein' }}</td>
-            <td>
-              <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-primary btn-sm">Übung hinzufügen</a>
-              <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-info btn-sm">Bearbeiten</a>
-              <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" style="display:inline;">
-                {{ toggle_form.hidden_tag() }}
-                {% if tpl.is_visible %}
-                  {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Unsichtbar') }}
-                {% else %}
-                  {{ toggle_form.submit(class="btn btn-warning btn-sm", value='Sichtbar') }}
-                {% endif %}
-              </form>
-              <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Template Trainingsplan wirklich löschen?');">
-                {{ delete_tpl_form.hidden_tag() }}
-                {{ delete_tpl_form.submit(class="btn btn-danger btn-sm", value='Löschen') }}
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Zurück</a>
+
+    <div class="section-label">Vorlagen ({{ templates|length }})</div>
+    {% for tpl in templates %}
+    <div class="s-card" style="font-size:0.85rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.3rem;">
+        <strong>{{ tpl.title }}</strong>
+        <span class="badge {% if tpl.is_visible %}badge-success{% else %}badge-secondary{% endif %}">{{ 'Sichtbar' if tpl.is_visible else 'Versteckt' }}</span>
+      </div>
+      {% if tpl.description %}<div class="text-muted mb-2" style="font-size:0.8rem;">{{ tpl.description }}</div>{% endif %}
+      <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+        <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">+ Übung</a>
+        <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-outline-secondary btn-sm py-0" style="font-size:0.7rem;">Bearbeiten</a>
+        <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" style="display:inline;">
+          {{ toggle_form.hidden_tag() }}
+          {% if tpl.is_visible %}
+            {{ toggle_form.submit(class="btn btn-outline-warning btn-sm py-0", value='Verstecken', style="font-size:0.7rem;") }}
+          {% else %}
+            {{ toggle_form.submit(class="btn btn-outline-success btn-sm py-0", value='Zeigen', style="font-size:0.7rem;") }}
+          {% endif %}
+        </form>
+        <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Template wirklich löschen?');">
+          {{ delete_tpl_form.hidden_tag() }}
+          {{ delete_tpl_form.submit(class="btn btn-outline-danger btn-sm py-0", value='Löschen', style="font-size:0.7rem;") }}
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}

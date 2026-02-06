@@ -18,107 +18,116 @@
 {% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="text-center mb-3">Verlauf für "{{ exercise.name }}"</h2>
+  <div class="page-wrap">
+    <h2 class="page-title text-center">{{ exercise.name }}</h2>
     {% if exercise.description %}
-      <p class="text-center text-muted">{{ exercise.description }}</p>
+      <p class="text-center text-muted" style="margin-top:-0.5rem; margin-bottom:1rem; font-size:0.9rem;">{{ exercise.description }}</p>
     {% endif %}
     {% if exercise.video_url %}
-      <p class="text-center">
+      <p class="text-center" style="margin-bottom:1rem;">
         <a href="{{ exercise.video_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-info btn-sm">
           Video/Anleitung ansehen
         </a>
       </p>
     {% endif %}
+
     {% if summary_metrics.total_sessions %}
-      <div class="row text-center mb-4">
-        <div class="col-sm-6 col-lg-3 mb-3">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase text-muted">Gesamtvolumen</h6>
-              <h4 class="mb-1">{{ summary_metrics.total_volume|round(1) }} kg</h4>
-              <div class="small text-muted">{{ summary_metrics.total_sessions }} Sätze insgesamt</div>
-              <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_volume_average|round(1) }} kg</div>
-              <div class="small text-muted">Bester Satz: {{ personal_bests.max_volume.value }} kg am {{ personal_bests.max_volume.timestamp.strftime('%d.%m.%Y') }}</div>
-            </div>
+      <!-- Summary Stats 2x2 Grid -->
+      <div class="section-label">Statistik</div>
+      <div class="stat-row">
+        <div class="stat-box blue">
+          <div class="val">{{ summary_metrics.total_volume|round(1) }}</div>
+          <div class="lbl">Gesamtvolumen (kg)</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">
+            {{ summary_metrics.total_sessions }} Sätze<br>
+            Ø {{ summary_metrics.recent_volume_average|round(1) }} kg ({{ moving_window }})<br>
+            Best: {{ personal_bests.max_volume.value }} kg · {{ personal_bests.max_volume.timestamp.strftime('%d.%m.%Y') }}
           </div>
         </div>
-        <div class="col-sm-6 col-lg-3 mb-3">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase text-muted">Letzte Einheit</h6>
-              <h5 class="mb-1">{{ summary_metrics.latest_session.weight }} kg × {{ summary_metrics.latest_session.repetitions }}</h5>
-              <div class="small text-muted">{{ summary_metrics.latest_session.timestamp.strftime('%d.%m.%Y %H:%M') }}</div>
-            </div>
+        <div class="stat-box green">
+          <div class="val" style="font-size:1.2rem;">{{ summary_metrics.latest_session.weight }}&times;{{ summary_metrics.latest_session.repetitions }}</div>
+          <div class="lbl">Letzte Einheit</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">
+            {{ summary_metrics.latest_session.timestamp.strftime('%d.%m.%Y %H:%M') }}
           </div>
         </div>
-        <div class="col-sm-6 col-lg-3 mb-3">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase text-muted">Max. Gewicht</h6>
-              <h4 class="mb-1">{{ personal_bests.max_weight.value }} kg</h4>
-              <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh · {{ personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }}</div>
-              <div class="small text-muted">Volumen: {{ personal_bests.max_volume.value }} kg</div>
-            </div>
+        <div class="stat-box orange">
+          <div class="val">{{ personal_bests.max_weight.value }}</div>
+          <div class="lbl">Max Gewicht (kg)</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">
+            {{ personal_bests.max_weight.repetitions }} Wdh · {{ personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }}<br>
+            Vol: {{ personal_bests.max_volume.value }} kg
           </div>
         </div>
-        <div class="col-sm-6 col-lg-3 mb-3">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase text-muted">Beste 1RM (Epley)</h6>
-              <h4 class="mb-1">{{ personal_bests.max_one_rm.value|round(1) }} kg</h4>
-              <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg × {{ personal_bests.max_one_rm.repetitions }} Wdh</div>
-              <div class="small text-muted">Gleitender Ø ({{ moving_window }}): {{ summary_metrics.recent_one_rm_average|round(1) }} kg</div>
-            </div>
+        <div class="stat-box purple">
+          <div class="val">{{ personal_bests.max_one_rm.value|round(1) }}</div>
+          <div class="lbl">Beste 1RM (kg)</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">
+            {{ personal_bests.max_one_rm.weight }} kg &times; {{ personal_bests.max_one_rm.repetitions }} Wdh<br>
+            Ø {{ summary_metrics.recent_one_rm_average|round(1) }} kg ({{ moving_window }})
           </div>
         </div>
       </div>
     {% else %}
       <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
     {% endif %}
-    <div id="chartContainer" class="mb-4">
-      <canvas id="progressChart"></canvas>
+
+    <!-- Chart -->
+    <div class="s-card" style="padding:0.75rem;">
+      <div id="chartContainer">
+        <canvas id="progressChart"></canvas>
+      </div>
     </div>
+
+    <!-- Progression Suggestion -->
     {% if progression %}
-    <div class="alert {% if progression.type == 'increase_weight' %}alert-success{% elif progression.type == 'decrease_weight' %}alert-warning{% else %}alert-info{% endif %} mb-3">
+    <div class="alert {% if progression.type == 'increase_weight' %}alert-success{% elif progression.type == 'decrease_weight' %}alert-warning{% else %}alert-info{% endif %}" style="margin-top:0.75rem; border-radius:0.75rem; font-size:0.9rem;">
       <strong>Progressions-Vorschlag:</strong> {{ progression.message }}
     </div>
     {% endif %}
-    <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block mb-2">Neuen Satz hinzufügen</a>
-    <h3>Letzte 15 Sätze</h3>
-    <ul class="list-group">
+
+    <!-- Add Session Button -->
+    <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block" style="border-radius:0.75rem; margin-top:0.75rem;">Neuen Satz hinzufügen</a>
+
+    <!-- Last 15 Sessions -->
+    <div class="section-label" style="margin-top:1.25rem;">Letzte 15 Sätze</div>
+    <div class="s-card s-card-flush">
       {% for session in sessions %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <div>{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }} - {{ session.weight }} kg - {{ session.repetitions }} Wiederholungen</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0.85rem; {% if not loop.last %}border-bottom:1px solid #eee;{% endif %}">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:0.88rem; font-weight:500;">
+              {{ session.weight }} kg &times; {{ session.repetitions }}
+              <span style="color:#6c757d; font-weight:400; font-size:0.8rem; margin-left:0.4rem;">{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }}</span>
+            </div>
             {% if session.perceived_exertion is not none or session.notes %}
-              <div class="mt-1 small text-muted">
-                {% if session.perceived_exertion is not none %}
-                  <div>Wahrgenommene Anstrengung (RPE): {{ session.perceived_exertion }}</div>
-                {% endif %}
-                {% if session.notes %}
-                  <div>Notizen: <span style="white-space: pre-line;">{{ session.notes }}</span></div>
-                {% endif %}
+              <div style="font-size:0.75rem; color:#6c757d; margin-top:0.15rem;">
+                {% if session.perceived_exertion is not none %}RPE {{ session.perceived_exertion }}{% endif %}
+                {% if session.perceived_exertion is not none and session.notes %} · {% endif %}
+                {% if session.notes %}<span style="white-space:pre-line;">{{ session.notes }}</span>{% endif %}
               </div>
             {% endif %}
           </div>
-          <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');">
+          <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');" style="margin-left:0.5rem; flex-shrink:0;">
             {{ delete_session_form.hidden_tag() }}
-            {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×") }}
+            {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×", style="padding:0.15rem 0.5rem; font-size:0.85rem; border-radius:0.5rem;") }}
           </form>
-        </li>
+        </div>
       {% endfor %}
-    </ul>
-    <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" class="mt-4" onsubmit="return confirm('Übung wirklich löschen?');">
+    </div>
+
+    <!-- Edit / Delete Exercise -->
+    <form action="{{ url_for('delete_exercise', exercise_id=exercise.id) }}" method="POST" style="margin-top:1rem;" onsubmit="return confirm('Übung wirklich löschen?');">
       {{ delete_exercise_form.hidden_tag() }}
       {% if editable %}
-        <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block mb-4">Übung bearbeiten</a>
+        <a href="{{ url_for('edit_exercise', exercise_id=exercise.id) }}" class="btn btn-info btn-block" style="border-radius:0.75rem; margin-bottom:0.5rem;">Übung bearbeiten</a>
       {% else %}
-        <div class="alert alert-warning">Diese Übung kann nicht bearbeitet werden.</div>
+        <div class="alert alert-warning" style="border-radius:0.75rem;">Diese Übung kann nicht bearbeitet werden.</div>
       {% endif %}
-      {{ delete_exercise_form.submit(class="btn btn-danger btn-block", value='Übung löschen') }}
+      {{ delete_exercise_form.submit(class="btn btn-danger btn-block", value='Übung löschen', style="border-radius:0.75rem;") }}
     </form>
-    <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="btn btn-secondary btn-block mt-2">Zurück</a>
+
+    <!-- Back Link -->
+    <a href="{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}" class="back-link">Zurück zum Trainingsplan</a>
   </div>
 {% endblock %}
 

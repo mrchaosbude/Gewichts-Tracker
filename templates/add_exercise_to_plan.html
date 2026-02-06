@@ -3,37 +3,38 @@
 {% block title %}Übung hinzufügen{% endblock %}
 
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Übung zu "{{ training_plan.title }}" hinzufügen</h2>
-    <form method="POST">
-      {{ form.hidden_tag() }}
-      <div class="form-group">
-        <label for="existing_exercise">Vorhandene Übung verwenden</label>
-        <select name="existing_exercise_id" class="form-control">
-          <option value="">-- Neue Übung erstellen --</option>
-          {% for ex in existing_exercises %}
-            <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}" data-video="{{ ex.video_url or '' }}">{{ ex.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        {{ form.name.label }} {{ form.name(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.description.label }} {{ form.description(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.video_url.label }} {{ form.video_url(class="form-control", placeholder="https://youtube.com/watch?v=...") }}
-        <small class="form-text text-muted">Link zu einem Video oder einer Anleitung für diese Übung</small>
-      </div>
-      <div class="form-group">
-        {{ form.muscle_group.label }} {{ form.muscle_group(class="form-control") }}
-      </div>
-      <div class="form-group">
+  <div class="page-wrap">
+    <h2 class="page-title">Übung hinzufügen</h2>
+    <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">zu &bdquo;{{ training_plan.title }}&ldquo;</p>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          <label class="small font-weight-bold" for="existing_exercise">Vorhandene Übung verwenden</label>
+          <select name="existing_exercise_id" class="form-control">
+            <option value="">-- Neue Übung erstellen --</option>
+            {% for ex in existing_exercises %}
+              <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}" data-video="{{ ex.video_url or '' }}">{{ ex.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          {{ form.name.label(class="small font-weight-bold") }} {{ form.name(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.description.label(class="small font-weight-bold") }} {{ form.description(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.video_url.label(class="small font-weight-bold") }} {{ form.video_url(class="form-control", placeholder="https://youtube.com/watch?v=...") }}
+          <small class="form-text text-muted">Link zu einem Video oder einer Anleitung</small>
+        </div>
+        <div class="form-group">
+          {{ form.muscle_group.label(class="small font-weight-bold") }} {{ form.muscle_group(class="form-control") }}
+        </div>
         {{ form.submit(class="btn btn-primary btn-block") }}
-      </div>
-    </form>
-    <a href="{{ url_for('training_plan_detail', training_plan_id=training_plan.id) }}" class="btn btn-secondary btn-block">Zurück</a>
+      </form>
+    </div>
+    <a href="{{ url_for('training_plan_detail', training_plan_id=training_plan.id) }}" class="back-link">&larr; Zurück zum Plan</a>
   </div>
 {% endblock %}
 

@@ -2,29 +2,53 @@
 
 {% block title %}Registrieren{% endblock %}
 
+{% block extra_head %}
+  <style>
+    .register-wrap {
+      max-width: 400px;
+      margin: 2rem auto;
+      padding: 0 15px;
+    }
+    .register-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .register-header h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <div class="container">
-    <h2 class="mb-4">Registrieren</h2>
-    <form method="POST">
-      {{ form.hidden_tag() }}
-      <div class="form-group">
-        {{ form.username.label }} {{ form.username(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.password.label }} {{ form.password(class="form-control") }}
-      </div>
-      <div class="form-group">
-        {{ form.confirm.label }} {{ form.confirm(class="form-control") }}
-      </div>
-      {% if form.recaptcha is not none %}
+  <div class="register-wrap">
+    <div class="register-header">
+      <h2>Konto erstellen</h2>
+      <p class="text-muted" style="font-size:0.9rem;">Registriere dich, um loszulegen</p>
+    </div>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
         <div class="form-group">
-          {{ form.recaptcha }}
+          {{ form.username.label(class="small font-weight-bold") }}
+          {{ form.username(class="form-control", placeholder="Benutzername wählen") }}
         </div>
-      {% endif %}
-      <div class="form-group">
+        <div class="form-group">
+          {{ form.password.label(class="small font-weight-bold") }}
+          {{ form.password(class="form-control", placeholder="Passwort") }}
+        </div>
+        <div class="form-group">
+          {{ form.confirm.label(class="small font-weight-bold") }}
+          {{ form.confirm(class="form-control", placeholder="Passwort wiederholen") }}
+        </div>
+        {% if form.recaptcha is not none %}
+          <div class="form-group">
+            {{ form.recaptcha }}
+          </div>
+        {% endif %}
         {{ form.submit(class="btn btn-primary btn-block") }}
-      </div>
-    </form>
-    <p>Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+      </form>
+    </div>
+    <p class="text-center mt-3" style="font-size:0.9rem;">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
   </div>
 {% endblock %}

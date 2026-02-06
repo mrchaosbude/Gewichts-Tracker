@@ -774,11 +774,60 @@ def logout():
 def dashboard():
     training_plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
     deload_needed, weeks_trained = check_deload_reminder(current_user.id)
+
+    # Quick-Stats für diese Woche
+    today = datetime.date.today()
+    this_monday = today - datetime.timedelta(days=today.weekday())
+    week_sessions = (
+        ExerciseSession.query
+        .filter(
+            ExerciseSession.user_id == current_user.id,
+            ExerciseSession.timestamp >= datetime.datetime.combine(this_monday, datetime.time.min),
+        )
+        .all()
+    )
+    week_sets = len(week_sessions)
+    week_volume = sum(s.weight * s.repetitions for s in week_sessions)
+    week_days = len(set(s.timestamp.date() for s in week_sessions))
+
+    # Trainings-Streak (aufeinanderfolgende Wochen mit Training)
+    streak = 0
+    for i in range(52):
+        w_start = this_monday - datetime.timedelta(weeks=i)
+        w_end = w_start + datetime.timedelta(days=7)
+        cnt = ExerciseSession.query.filter(
+            ExerciseSession.user_id == current_user.id,
+            ExerciseSession.timestamp >= datetime.datetime.combine(w_start, datetime.time.min),
+            ExerciseSession.timestamp < datetime.datetime.combine(w_end, datetime.time.min),
+        ).count()
+        if cnt > 0:
+            streak += 1
+        else:
+            break
+
+    # Nächste geplante Trainings (die nächsten 7 Tage)
+    upcoming_planned = (
+        PlannedTraining.query
+        .filter(
+            PlannedTraining.user_id == current_user.id,
+            PlannedTraining.date >= today,
+            PlannedTraining.date <= today + datetime.timedelta(days=7),
+        )
+        .order_by(PlannedTraining.date)
+        .all()
+    )
+
     return render_template(
         'dashboard.html',
         training_plans=training_plans,
         deload_needed=deload_needed,
         weeks_trained=weeks_trained,
+        week_sets=week_sets,
+        week_volume=week_volume,
+        week_days=week_days,
+        streak=streak,
+        upcoming_planned=upcoming_planned,
+        today=today,
     )
 
 
