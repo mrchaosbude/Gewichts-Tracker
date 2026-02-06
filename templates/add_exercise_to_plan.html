@@ -12,7 +12,7 @@
         <select name="existing_exercise_id" class="form-control">
           <option value="">-- Neue Übung erstellen --</option>
           {% for ex in existing_exercises %}
-            <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}">{{ ex.name }}</option>
+            <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}" data-video="{{ ex.video_url or '' }}">{{ ex.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -21,6 +21,13 @@
       </div>
       <div class="form-group">
         {{ form.description.label }} {{ form.description(class="form-control") }}
+      </div>
+      <div class="form-group">
+        {{ form.video_url.label }} {{ form.video_url(class="form-control", placeholder="https://youtube.com/watch?v=...") }}
+        <small class="form-text text-muted">Link zu einem Video oder einer Anleitung für diese Übung</small>
+      </div>
+      <div class="form-group">
+        {{ form.muscle_group.label }} {{ form.muscle_group(class="form-control") }}
       </div>
       <div class="form-group">
         {{ form.submit(class="btn btn-primary btn-block") }}
@@ -36,15 +43,18 @@
       const select = document.querySelector('select[name="existing_exercise_id"]');
       const nameInput = document.getElementById('name');
       const descInput = document.getElementById('description');
+      const videoInput = document.getElementById('video_url');
 
       function fillFields() {
         const option = select.options[select.selectedIndex];
         if (option && option.value) {
           nameInput.value = option.dataset.name || '';
           descInput.value = option.dataset.description || '';
+          videoInput.value = option.dataset.video || '';
         } else {
           nameInput.value = '';
           descInput.value = '';
+          videoInput.value = '';
         }
       }
 

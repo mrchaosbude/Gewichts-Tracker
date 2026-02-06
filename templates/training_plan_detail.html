@@ -59,6 +59,32 @@
       padding: 1rem;
       background-color: #fff;
     }
+
+    /* Dark Mode für Übungsstatistik */
+    [data-theme="dark"] .exercise-stats-toggle summary {
+      color: #eaeaea;
+      background-color: #16213e;
+      border-color: #444;
+    }
+
+    [data-theme="dark"] .exercise-stats-body {
+      background-color: #16213e;
+      border-color: #444;
+    }
+
+    /* Superset Farben */
+    .border-left-superset { border-left: 4px solid #6c757d !important; }
+    .superset-0 { border-left-color: #007bff !important; }
+    .superset-1 { border-left-color: #28a745 !important; }
+    .superset-2 { border-left-color: #ffc107 !important; }
+    .superset-3 { border-left-color: #dc3545 !important; }
+    .superset-4 { border-left-color: #17a2b8 !important; }
+
+    .badge-superset-0 { background-color: #007bff; color: #fff; }
+    .badge-superset-1 { background-color: #28a745; color: #fff; }
+    .badge-superset-2 { background-color: #ffc107; color: #212529; }
+    .badge-superset-3 { background-color: #dc3545; color: #fff; }
+    .badge-superset-4 { background-color: #17a2b8; color: #fff; }
   </style>
 {% endblock %}
 
@@ -72,7 +98,29 @@
       </form>
     </div>
     <p>{{ training_plan.description }}</p>
-    <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success mb-3 btn-block">Übung hinzufügen</a>
+    <div class="btn-group mb-3 btn-block" role="group">
+      <a href="{{ url_for('add_exercise_to_plan', training_plan_id=training_plan.id) }}" class="btn btn-success">Übung hinzufügen</a>
+      <a href="{{ url_for('print_training_plan', training_plan_id=training_plan.id) }}" class="btn btn-outline-secondary" target="_blank">Drucken / PDF</a>
+    </div>
+    <div class="mb-3">
+      {% if training_plan.share_token %}
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" class="form-control" readonly value="{{ request.url_root.rstrip('/') + url_for('copy_shared_plan', token=training_plan.share_token) }}" id="shareLink">
+          <div class="input-group-append">
+            <button class="btn btn-outline-success btn-sm" type="button" onclick="navigator.clipboard.writeText(document.getElementById('shareLink').value); this.textContent='Kopiert!';">Link kopieren</button>
+          </div>
+        </div>
+        <form action="{{ url_for('unshare_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+          {{ delete_plan_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-danger btn-sm">Teilen deaktivieren</button>
+        </form>
+      {% else %}
+        <form action="{{ url_for('share_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+          {{ delete_plan_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-primary btn-sm">Plan teilen</button>
+        </form>
+      {% endif %}
+    </div>
     {% if exercise_overview %}
       <details id="exerciseStatsToggle" class="exercise-stats-toggle">
         <summary>Übungsstatistiken</summary>
@@ -150,10 +198,15 @@
       <h3>Übungen</h3>
       <ul class="list-group">
         {% for item in exercise_overview %}
-          <li class="list-group-item">
+          <li class="list-group-item {% if item.superset_group %}border-left-superset superset-{{ item.superset_group % 5 }}{% endif %}">
             <div class="d-flex justify-content-between">
-              <div class="pr-3">
-                <strong>{{ item.exercise.name }}</strong>
+              <div class="pr-3 flex-grow-1">
+                <div class="d-flex align-items-center flex-wrap">
+                  <strong>{{ item.exercise.name }}</strong>
+                  {% if item.superset_group %}
+                    <span class="badge badge-pill badge-superset-{{ item.superset_group % 5 }} ml-2">Superset {{ item.superset_group }}</span>
+                  {% endif %}
+                </div>
                 {% if item.exercise.description %}
                   <p class="mb-2 small text-muted">{{ item.exercise.description }}</p>
                 {% endif %}
@@ -166,9 +219,37 @@
                     <div class="text-muted">Noch keine Einheiten erfasst.</div>
                   {% endfor %}
                 </div>
+                <form action="{{ url_for('set_superset', training_plan_id=training_plan.id) }}" method="POST" class="form-inline mt-2">
+                  {{ delete_plan_form.hidden_tag() }}
+                  <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                  <div class="input-group input-group-sm" style="max-width: 220px;">
+                    <input type="number" name="superset_group" class="form-control" placeholder="Superset #" min="0" max="99" value="{{ item.superset_group or '' }}">
+                    <div class="input-group-append">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm">Setzen</button>
+                    </div>
+                  </div>
+                </form>
               </div>
-              <div class="d-flex align-items-start">
-                <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="btn btn-info btn-sm">Details</a>
+              <div class="d-flex flex-column align-items-end" style="min-width: 90px;">
+                <div class="btn-group btn-group-sm mb-1">
+                  {% if not loop.first %}
+                    <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+                      {{ delete_plan_form.hidden_tag() }}
+                      <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                      <input type="hidden" name="direction" value="up">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm" title="Nach oben">&uarr;</button>
+                    </form>
+                  {% endif %}
+                  {% if not loop.last %}
+                    <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="d-inline">
+                      {{ delete_plan_form.hidden_tag() }}
+                      <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                      <input type="hidden" name="direction" value="down">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm" title="Nach unten">&darr;</button>
+                    </form>
+                  {% endif %}
+                </div>
+                <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="btn btn-info btn-sm btn-block">Details</a>
               </div>
             </div>
           </li>

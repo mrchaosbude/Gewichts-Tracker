@@ -10,13 +10,14 @@ from flask import (
     Blueprint,
     Response,
     send_file,
+    make_response,
 )
 import markdown
 import bleach
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField
+from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField, SelectField
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
 from urllib.parse import urlparse
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -26,6 +27,8 @@ import json
 import csv
 import zipfile
 import os
+import uuid
+import calendar as cal_module
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
@@ -78,7 +81,9 @@ class User(UserMixin, db.Model):
 plan_exercises = db.Table(
     'plan_exercises',
     db.Column('training_plan_id', db.Integer, db.ForeignKey('training_plan.id'), primary_key=True),
-    db.Column('exercise_id', db.Integer, db.ForeignKey('exercise.id'), primary_key=True)
+    db.Column('exercise_id', db.Integer, db.ForeignKey('exercise.id'), primary_key=True),
+    db.Column('superset_group', db.Integer, nullable=True),
+    db.Column('position', db.Integer, nullable=True),
 )
 
 
@@ -87,12 +92,20 @@ class TrainingPlan(db.Model):
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    share_token = db.Column(db.String(36), nullable=True, unique=True)
     exercises = db.relationship('Exercise', secondary=plan_exercises, back_populates='training_plans')
+
+MUSCLE_GROUPS = [
+    'Brust', 'Rücken', 'Schultern', 'Bizeps', 'Trizeps',
+    'Beine', 'Waden', 'Bauch', 'Unterarme', 'Ganzkörper', 'Sonstiges',
+]
 
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
-    description = db.Column(db.String(300), nullable=True)  # Beschreibung der Übung
+    description = db.Column(db.String(300), nullable=True)
+    video_url = db.Column(db.String(500), nullable=True)
+    muscle_group = db.Column(db.String(50), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
     training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
@@ -134,6 +147,46 @@ class FooterLink(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     url = db.Column(db.String(500), nullable=False)
+
+
+# Körpergewicht-Tracking
+class BodyWeight(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    weight = db.Column(db.Float, nullable=False)  # Gewicht in kg
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    notes = db.Column(db.Text)  # Optionale Notizen
+
+
+# Geplante Trainingstage
+class PlannedTraining(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    label = db.Column(db.String(100), nullable=True)  # z.B. "Push", "Pull", "Beine"
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'date', name='uq_user_planned_date'),)
+
+
+# Fortschrittsfotos
+class ProgressPhoto(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    filename = db.Column(db.String(300), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    notes = db.Column(db.Text)
+    body_weight = db.Column(db.Float, nullable=True)
+
+
+# Upload-Konfiguration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads', 'photos')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB max
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 @app.context_processor
@@ -205,7 +258,9 @@ class TrainingPlanForm(FlaskForm):
 
 class ExerciseTemplateForm(FlaskForm):
     name = StringField('Übungsname', validators=[DataRequired()])
-    description = StringField('Beschreibung (optional)')  # Beschreibung bei normaler Übung
+    description = StringField('Beschreibung (optional)')
+    video_url = StringField('Video/Anleitung URL (optional)')
+    muscle_group = SelectField('Muskelgruppe (optional)', choices=[('', '-- Keine --')] + [(mg, mg) for mg in MUSCLE_GROUPS], default='')
     submit = SubmitField('Übung hinzufügen')
 
 class ExerciseSessionForm(FlaskForm):
@@ -296,6 +351,16 @@ class FooterLinkForm(FlaskForm):
 
 class DeleteFooterLinkForm(FlaskForm):
 
+    submit = SubmitField('Löschen')
+
+
+class BodyWeightForm(FlaskForm):
+    weight = IntegerField('Gewicht (kg)', validators=[InputRequired(), NumberRange(min=20, max=500)], render_kw={"step": "0.1", "onfocus": "this.select()"})
+    notes = TextAreaField('Notizen (optional)', render_kw={"rows": 2})
+    submit = SubmitField('Speichern')
+
+
+class DeleteBodyWeightForm(FlaskForm):
     submit = SubmitField('Löschen')
 
 
@@ -420,6 +485,33 @@ def _moving_average(values, window):
     return averaged
 
 
+def check_deload_reminder(user_id, threshold_weeks=6):
+    """Return (should_deload, consecutive_weeks) if the user has trained
+    for *threshold_weeks* consecutive weeks without a break."""
+    today = datetime.datetime.now().date()
+    monday = today - datetime.timedelta(days=today.weekday())
+
+    # Check the last 12 weeks for consecutive training
+    consecutive = 0
+    for i in range(12):
+        week_start = monday - datetime.timedelta(weeks=i)
+        week_end = week_start + datetime.timedelta(days=7)
+        count = (
+            ExerciseSession.query
+            .filter(
+                ExerciseSession.user_id == user_id,
+                ExerciseSession.timestamp >= datetime.datetime.combine(week_start, datetime.time.min),
+                ExerciseSession.timestamp < datetime.datetime.combine(week_end, datetime.time.min),
+            )
+            .count()
+        )
+        if count > 0:
+            consecutive += 1
+        else:
+            break
+    return consecutive >= threshold_weeks, consecutive
+
+
 def calculate_exercise_statistics(sessions, moving_window=5):
     sorted_sessions = sorted(sessions, key=lambda s: s.timestamp)
     chart_data = {
@@ -518,6 +610,75 @@ def calculate_exercise_statistics(sessions, moving_window=5):
     }
 
 
+def calculate_progression_suggestion(sessions):
+    """Berechnet einen Progressions-Vorschlag basierend auf den letzten Sessions."""
+    if len(sessions) < 3:
+        return None
+    sorted_sessions = sorted(sessions, key=lambda s: s.timestamp, reverse=True)
+    last_3 = sorted_sessions[:3]
+    weight = last_3[0].weight
+    # Prüfen ob die letzten 3 Sätze alle das gleiche Gewicht hatten
+    same_weight = all(s.weight == weight for s in last_3)
+    if not same_weight:
+        return None
+    reps = [s.repetitions for s in last_3]
+    avg_reps = sum(reps) / len(reps)
+    min_reps = min(reps)
+    # Wenn alle Sätze mindestens 10 Wiederholungen hatten → Gewicht erhöhen
+    if min_reps >= 10:
+        new_weight = weight + 2.5
+        return {
+            'type': 'increase_weight',
+            'current_weight': weight,
+            'suggested_weight': new_weight,
+            'avg_reps': round(avg_reps, 1),
+            'message': f'Du schaffst konstant {min_reps}+ Wdh bei {weight} kg. Steigere auf {new_weight} kg!',
+        }
+    # Wenn unter 6 Wiederholungen → Gewicht reduzieren
+    if avg_reps < 6 and weight > 5:
+        new_weight = weight - 2.5
+        return {
+            'type': 'decrease_weight',
+            'current_weight': weight,
+            'suggested_weight': new_weight,
+            'avg_reps': round(avg_reps, 1),
+            'message': f'Durchschnittlich nur {round(avg_reps, 1)} Wdh bei {weight} kg. Versuche {new_weight} kg für mehr Wiederholungen.',
+        }
+    # Sonst: Wiederholungen steigern
+    target_reps = int(avg_reps) + 1
+    return {
+        'type': 'increase_reps',
+        'current_weight': weight,
+        'suggested_weight': weight,
+        'avg_reps': round(avg_reps, 1),
+        'message': f'Versuche {target_reps} Wdh bei {weight} kg zu erreichen.',
+    }
+
+
+def check_new_personal_records(exercise_id, user_id, new_weight, new_reps):
+    """Prüft ob ein neuer Satz einen persönlichen Rekord darstellt."""
+    previous_sessions = (
+        ExerciseSession.query
+        .filter_by(exercise_id=exercise_id, user_id=user_id)
+        .all()
+    )
+    if not previous_sessions:
+        return []
+    records = []
+    max_weight = max(s.weight for s in previous_sessions)
+    if new_weight > max_weight:
+        records.append(f'Neuer Gewichtsrekord: {new_weight} kg! (vorher: {max_weight} kg)')
+    max_volume = max(s.weight * s.repetitions for s in previous_sessions)
+    new_volume = new_weight * new_reps
+    if new_volume > max_volume:
+        records.append(f'Neues Volumenrekord: {new_volume} kg! (vorher: {max_volume} kg)')
+    new_one_rm = round(new_weight * (1 + new_reps / 30.0), 1)
+    max_one_rm = max(round(s.weight * (1 + s.repetitions / 30.0), 1) for s in previous_sessions)
+    if new_one_rm > max_one_rm:
+        records.append(f'Neue geschätzte 1RM: {new_one_rm} kg! (vorher: {max_one_rm} kg)')
+    return records
+
+
 def serialize_personal_bests(personal_bests):
     serialized = {}
     for key, entry in personal_bests.items():
@@ -556,6 +717,13 @@ def serialize_summary(summary):
 # ----------------------------------------------------
 # Routen
 # ----------------------------------------------------
+@app.route('/sw.js')
+def service_worker():
+    response = make_response(send_file('static/sw.js', mimetype='application/javascript'))
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
 @app.route('/fit')
 def index():
     return render_template('index.html')
@@ -605,7 +773,417 @@ def logout():
 @login_required
 def dashboard():
     training_plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
-    return render_template('dashboard.html', training_plans=training_plans)
+    deload_needed, weeks_trained = check_deload_reminder(current_user.id)
+    return render_template(
+        'dashboard.html',
+        training_plans=training_plans,
+        deload_needed=deload_needed,
+        weeks_trained=weeks_trained,
+    )
+
+
+@app.route('/statistics')
+@login_required
+def statistics():
+    now = datetime.datetime.now()
+    # Alle Sessions des Users
+    all_sessions = (
+        ExerciseSession.query
+        .filter_by(user_id=current_user.id)
+        .order_by(ExerciseSession.timestamp.desc())
+        .all()
+    )
+    # --- Muskelgruppen-Volumen ---
+    muscle_volume = {}
+    for s in all_sessions:
+        mg = s.exercise.muscle_group or 'Nicht zugeordnet'
+        volume = s.weight * s.repetitions
+        muscle_volume[mg] = muscle_volume.get(mg, 0) + volume
+    muscle_labels = list(muscle_volume.keys())
+    muscle_values = list(muscle_volume.values())
+
+    # --- Vergleich diese Woche vs. letzte Woche ---
+    today = now.date()
+    # Montag dieser Woche
+    this_monday = today - datetime.timedelta(days=today.weekday())
+    last_monday = this_monday - datetime.timedelta(days=7)
+    this_week_sessions = [
+        s for s in all_sessions
+        if s.timestamp.date() >= this_monday
+    ]
+    last_week_sessions = [
+        s for s in all_sessions
+        if last_monday <= s.timestamp.date() < this_monday
+    ]
+    this_week_volume = sum(s.weight * s.repetitions for s in this_week_sessions)
+    last_week_volume = sum(s.weight * s.repetitions for s in last_week_sessions)
+    this_week_sets = len(this_week_sessions)
+    last_week_sets = len(last_week_sessions)
+    volume_diff = this_week_volume - last_week_volume
+    sets_diff = this_week_sets - last_week_sets
+
+    # Vergleich pro Übung
+    exercise_comparison = []
+    this_week_by_exercise = {}
+    last_week_by_exercise = {}
+    for s in this_week_sessions:
+        name = s.exercise.name
+        if name not in this_week_by_exercise:
+            this_week_by_exercise[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
+        this_week_by_exercise[name]['sets'] += 1
+        this_week_by_exercise[name]['volume'] += s.weight * s.repetitions
+        this_week_by_exercise[name]['max_weight'] = max(this_week_by_exercise[name]['max_weight'], s.weight)
+    for s in last_week_sessions:
+        name = s.exercise.name
+        if name not in last_week_by_exercise:
+            last_week_by_exercise[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
+        last_week_by_exercise[name]['sets'] += 1
+        last_week_by_exercise[name]['volume'] += s.weight * s.repetitions
+        last_week_by_exercise[name]['max_weight'] = max(last_week_by_exercise[name]['max_weight'], s.weight)
+    all_exercise_names = sorted(set(list(this_week_by_exercise.keys()) + list(last_week_by_exercise.keys())))
+    for name in all_exercise_names:
+        tw = this_week_by_exercise.get(name, {'sets': 0, 'volume': 0, 'max_weight': 0})
+        lw = last_week_by_exercise.get(name, {'sets': 0, 'volume': 0, 'max_weight': 0})
+        exercise_comparison.append({
+            'name': name,
+            'this_week': tw,
+            'last_week': lw,
+            'volume_diff': tw['volume'] - lw['volume'],
+            'weight_diff': tw['max_weight'] - lw['max_weight'],
+        })
+
+    # --- Trainingsfrequenz (letzte 12 Wochen) ---
+    frequency_data = []
+    for i in range(11, -1, -1):
+        week_start = this_monday - datetime.timedelta(weeks=i)
+        week_end = week_start + datetime.timedelta(days=7)
+        week_sessions = [
+            s for s in all_sessions
+            if week_start <= s.timestamp.date() < week_end
+        ]
+        training_days = len(set(s.timestamp.date() for s in week_sessions))
+        week_label = week_start.strftime('%d.%m')
+        frequency_data.append({
+            'label': week_label,
+            'days': training_days,
+            'sets': len(week_sessions),
+            'volume': sum(s.weight * s.repetitions for s in week_sessions),
+        })
+
+    return render_template(
+        'statistics.html',
+        muscle_labels=muscle_labels,
+        muscle_values=muscle_values,
+        this_week_volume=this_week_volume,
+        last_week_volume=last_week_volume,
+        volume_diff=volume_diff,
+        this_week_sets=this_week_sets,
+        last_week_sets=last_week_sets,
+        sets_diff=sets_diff,
+        exercise_comparison=exercise_comparison,
+        frequency_data=frequency_data,
+    )
+
+
+# ----------------------------------------------------
+# Achievements / Badges
+# ----------------------------------------------------
+ACHIEVEMENTS = [
+    # (id, name, beschreibung, bedingung_fn)
+    ('first_session', 'Erster Satz', 'Deinen allerersten Satz geloggt', lambda s, d, r: s >= 1),
+    ('sets_10', '10 Sätze', '10 Sätze absolviert', lambda s, d, r: s >= 10),
+    ('sets_50', '50 Sätze', '50 Sätze absolviert', lambda s, d, r: s >= 50),
+    ('sets_100', 'Century Club', '100 Sätze absolviert', lambda s, d, r: s >= 100),
+    ('sets_500', 'Eisenkrieger', '500 Sätze absolviert', lambda s, d, r: s >= 500),
+    ('sets_1000', 'Legende', '1000 Sätze absolviert', lambda s, d, r: s >= 1000),
+    ('days_7', 'Erste Woche', 'An 7 verschiedenen Tagen trainiert', lambda s, d, r: d >= 7),
+    ('days_30', 'Monatskämpfer', 'An 30 verschiedenen Tagen trainiert', lambda s, d, r: d >= 30),
+    ('days_100', 'Dauerläufer', 'An 100 verschiedenen Tagen trainiert', lambda s, d, r: d >= 100),
+    ('days_365', 'Jahresmeister', 'An 365 verschiedenen Tagen trainiert', lambda s, d, r: d >= 365),
+    ('reg_30', '30 Tage dabei', 'Seit 30 Tagen registriert', lambda s, d, r: r >= 30),
+    ('reg_180', 'Halbzeit', 'Seit 6 Monaten registriert', lambda s, d, r: r >= 180),
+    ('reg_365', 'Ein Jahr dabei', 'Seit einem Jahr registriert', lambda s, d, r: r >= 365),
+]
+
+
+@app.route('/achievements')
+@login_required
+def achievements():
+    total_sessions = ExerciseSession.query.filter_by(user_id=current_user.id).count()
+    training_days = db.session.query(
+        db.func.date(ExerciseSession.timestamp)
+    ).filter_by(user_id=current_user.id).distinct().count()
+    reg_days = (datetime.datetime.now() - (current_user.registration_date or datetime.datetime.now())).days
+
+    earned = []
+    locked = []
+    for aid, name, desc, check_fn in ACHIEVEMENTS:
+        if check_fn(total_sessions, training_days, reg_days):
+            earned.append({'id': aid, 'name': name, 'description': desc})
+        else:
+            locked.append({'id': aid, 'name': name, 'description': desc})
+
+    return render_template(
+        'achievements.html',
+        earned=earned,
+        locked=locked,
+        total_sessions=total_sessions,
+        training_days=training_days,
+        reg_days=reg_days,
+    )
+
+
+# ----------------------------------------------------
+# Fortschrittsfotos
+# ----------------------------------------------------
+@app.route('/progress_photos', methods=['GET', 'POST'])
+@login_required
+def progress_photos():
+    if request.method == 'POST':
+        if 'photo' not in request.files:
+            flash('Keine Datei ausgewählt.', 'warning')
+            return redirect(url_for('progress_photos'))
+        file = request.files['photo']
+        if file.filename == '':
+            flash('Keine Datei ausgewählt.', 'warning')
+            return redirect(url_for('progress_photos'))
+        if file and allowed_file(file.filename):
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            filename = f'{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}'
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            notes = request.form.get('notes', '').strip() or None
+            bw = request.form.get('body_weight', '').strip()
+            body_weight_val = float(bw) if bw else None
+            photo = ProgressPhoto(
+                user_id=current_user.id,
+                filename=filename,
+                notes=notes,
+                body_weight=body_weight_val,
+            )
+            db.session.add(photo)
+            db.session.commit()
+            flash('Foto hochgeladen!', 'success')
+            return redirect(url_for('progress_photos'))
+        else:
+            flash('Ungültiges Dateiformat. Erlaubt: PNG, JPG, JPEG, WebP', 'danger')
+            return redirect(url_for('progress_photos'))
+
+    photos = (
+        ProgressPhoto.query
+        .filter_by(user_id=current_user.id)
+        .order_by(ProgressPhoto.timestamp.desc())
+        .all()
+    )
+    delete_form = DeleteBodyWeightForm()
+    return render_template('progress_photos.html', photos=photos, delete_form=delete_form)
+
+
+@app.route('/progress_photos/<int:photo_id>/delete', methods=['POST'])
+@login_required
+def delete_progress_photo(photo_id):
+    photo = ProgressPhoto.query.get_or_404(photo_id)
+    if photo.user_id != current_user.id:
+        abort(403)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+    db.session.delete(photo)
+    db.session.commit()
+    flash('Foto gelöscht.', 'info')
+    return redirect(url_for('progress_photos'))
+
+
+# ----------------------------------------------------
+# Trainings-Kalender
+# ----------------------------------------------------
+@app.route('/calendar')
+@login_required
+def training_calendar():
+    year = request.args.get('year', datetime.datetime.now().year, type=int)
+    month = request.args.get('month', datetime.datetime.now().month, type=int)
+    # Grenzen für den Monat berechnen
+    first_day = datetime.date(year, month, 1)
+    if month == 12:
+        last_day = datetime.date(year + 1, 1, 1)
+    else:
+        last_day = datetime.date(year, month + 1, 1)
+    # Alle Sessions des Users in diesem Monat
+    sessions = (
+        ExerciseSession.query
+        .filter_by(user_id=current_user.id)
+        .filter(ExerciseSession.timestamp >= datetime.datetime.combine(first_day, datetime.time.min))
+        .filter(ExerciseSession.timestamp < datetime.datetime.combine(last_day, datetime.time.min))
+        .all()
+    )
+    # Sätze pro Tag zählen
+    day_counts = {}
+    for s in sessions:
+        day = s.timestamp.date()
+        day_counts[day] = day_counts.get(day, 0) + 1
+    # Geplante Trainingstage laden
+    planned = PlannedTraining.query.filter(
+        PlannedTraining.user_id == current_user.id,
+        PlannedTraining.date >= first_day,
+        PlannedTraining.date < last_day,
+    ).all()
+    planned_map = {p.date: p.label for p in planned}
+    # Kalender-Daten aufbauen
+    today = datetime.date.today()
+    cal = cal_module.Calendar(firstweekday=0)  # Montag = 0
+    weeks = cal.monthdayscalendar(year, month)
+    calendar_weeks = []
+    for week in weeks:
+        week_data = []
+        for day_num in week:
+            if day_num == 0:
+                week_data.append({'day': 0, 'count': 0, 'planned': False, 'label': None, 'is_today': False})
+            else:
+                d = datetime.date(year, month, day_num)
+                count = day_counts.get(d, 0)
+                week_data.append({
+                    'day': day_num,
+                    'count': count,
+                    'planned': d in planned_map,
+                    'label': planned_map.get(d),
+                    'is_today': d == today,
+                    'date_str': d.isoformat(),
+                })
+        calendar_weeks.append(week_data)
+    # Max-Count für Farbintensität
+    max_count = max(day_counts.values()) if day_counts else 1
+    # Navigation: vorheriger/nächster Monat
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+    month_name = [
+        '', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+    ][month]
+    # Gesamtstatistik für den Monat
+    total_sessions = len(sessions)
+    training_days = len(day_counts)
+    total_volume = sum(s.weight * s.repetitions for s in sessions)
+    return render_template(
+        'training_calendar.html',
+        calendar_weeks=calendar_weeks,
+        year=year,
+        month=month,
+        month_name=month_name,
+        max_count=max_count,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        next_year=next_year,
+        next_month=next_month,
+        total_sessions=total_sessions,
+        training_days=training_days,
+        total_volume=total_volume,
+    )
+
+
+@app.route('/calendar/plan', methods=['POST'])
+@login_required
+def plan_training_day():
+    date_str = request.form.get('date')
+    label = request.form.get('label', '').strip() or None
+    if not date_str:
+        abort(400)
+    try:
+        day = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        abort(400)
+    existing = PlannedTraining.query.filter_by(user_id=current_user.id, date=day).first()
+    if existing:
+        existing.label = label
+    else:
+        db.session.add(PlannedTraining(user_id=current_user.id, date=day, label=label))
+    db.session.commit()
+    return redirect(url_for('training_calendar', year=day.year, month=day.month))
+
+
+@app.route('/calendar/unplan', methods=['POST'])
+@login_required
+def unplan_training_day():
+    date_str = request.form.get('date')
+    if not date_str:
+        abort(400)
+    try:
+        day = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        abort(400)
+    PlannedTraining.query.filter_by(user_id=current_user.id, date=day).delete()
+    db.session.commit()
+    return redirect(url_for('training_calendar', year=day.year, month=day.month))
+
+
+# ----------------------------------------------------
+# Körpergewicht-Tracking
+# ----------------------------------------------------
+@app.route('/body_weight', methods=['GET', 'POST'])
+@login_required
+def body_weight():
+    form = BodyWeightForm()
+    delete_form = DeleteBodyWeightForm()
+
+    if form.validate_on_submit():
+        new_entry = BodyWeight(
+            user_id=current_user.id,
+            weight=form.weight.data,
+            notes=form.notes.data or None
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+        flash('Gewicht gespeichert!', 'success')
+        return redirect(url_for('body_weight'))
+
+    # Alle Einträge des Benutzers, sortiert nach Datum
+    entries = BodyWeight.query.filter_by(user_id=current_user.id).order_by(BodyWeight.timestamp.desc()).all()
+
+    # Daten für das Chart vorbereiten (chronologisch)
+    chart_entries = sorted(entries, key=lambda e: e.timestamp)
+    chart_data = {
+        'labels': [e.timestamp.strftime('%d.%m.%Y') for e in chart_entries],
+        'weights': [e.weight for e in chart_entries]
+    }
+
+    # Statistiken berechnen
+    stats = None
+    if entries:
+        weights = [e.weight for e in entries]
+        stats = {
+            'current': entries[0].weight if entries else None,
+            'min': min(weights),
+            'max': max(weights),
+            'avg': round(sum(weights) / len(weights), 1),
+            'total_entries': len(entries)
+        }
+        # Änderung zum ersten Eintrag
+        if len(entries) > 1:
+            first_entry = chart_entries[0]
+            latest_entry = chart_entries[-1]
+            stats['change'] = round(latest_entry.weight - first_entry.weight, 1)
+
+    return render_template('body_weight.html', form=form, delete_form=delete_form,
+                           entries=entries, chart_data=chart_data, stats=stats)
+
+
+@app.route('/body_weight/<int:entry_id>/delete', methods=['POST'])
+@login_required
+def delete_body_weight(entry_id):
+    entry = BodyWeight.query.get_or_404(entry_id)
+    if entry.user_id != current_user.id:
+        abort(403)
+    db.session.delete(entry)
+    db.session.commit()
+    flash('Eintrag gelöscht!', 'info')
+    return redirect(url_for('body_weight'))
+
 
 @app.route('/create_training_plan', methods=['GET','POST'])
 @login_required
@@ -626,6 +1204,7 @@ def create_training_plan():
 
 @app.route('/import_training_plan', methods=['GET', 'POST'])
 @login_required
+@trainer_or_admin_required
 def import_training_plan():
     form = MarkdownImportForm()
     preview = None
@@ -682,8 +1261,21 @@ def training_plan_detail(training_plan_id):
         ex.id: exercise_owned_exclusively_by(current_user.id, ex)
         for ex in training_plan.exercises
     }
+    # Superset-Gruppen und Positionen laden
+    superset_map = {}
+    position_map = {}
+    rows = db.session.execute(
+        db.text('SELECT exercise_id, superset_group, position FROM plan_exercises WHERE training_plan_id = :pid'),
+        {'pid': training_plan_id}
+    ).fetchall()
+    for row in rows:
+        if row[1] is not None:
+            superset_map[row[0]] = row[1]
+        position_map[row[0]] = row[2] if row[2] is not None else 999999
+    # Übungen nach Position sortieren
+    sorted_exercises = sorted(training_plan.exercises, key=lambda ex: (position_map.get(ex.id, 999999), ex.id))
     exercise_overview = []
-    for exercise in training_plan.exercises:
+    for exercise in sorted_exercises:
         user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
         stats = calculate_exercise_statistics(user_sessions)
         recent_sessions = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
@@ -693,6 +1285,7 @@ def training_plan_detail(training_plan_id):
             'personal_bests': stats['personal_bests'],
             'recent_sessions': recent_sessions,
             'moving_window': stats['moving_window'],
+            'superset_group': superset_map.get(exercise.id),
         })
     return render_template(
         'training_plan_detail.html',
@@ -701,6 +1294,160 @@ def training_plan_detail(training_plan_id):
         editable_map=editable_map,
         exercise_overview=exercise_overview,
     )
+
+
+@app.route('/training_plan/<int:training_plan_id>/set_superset', methods=['POST'])
+@login_required
+def set_superset(training_plan_id):
+    training_plan = TrainingPlan.query.get_or_404(training_plan_id)
+    if training_plan.user_id != current_user.id:
+        abort(403)
+    exercise_id = request.form.get('exercise_id', type=int)
+    group = request.form.get('superset_group', type=int)
+    if exercise_id is None:
+        abort(400)
+    # group=0 oder leer → Superset entfernen
+    if not group:
+        group = None
+    db.session.execute(
+        db.text('UPDATE plan_exercises SET superset_group = :grp WHERE training_plan_id = :pid AND exercise_id = :eid'),
+        {'grp': group, 'pid': training_plan_id, 'eid': exercise_id}
+    )
+    db.session.commit()
+    if group:
+        flash(f'Übung zu Superset {group} zugeordnet.', 'success')
+    else:
+        flash('Superset-Zuordnung entfernt.', 'info')
+    return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
+
+
+@app.route('/training_plan/<int:training_plan_id>/reorder', methods=['POST'])
+@login_required
+def reorder_exercise(training_plan_id):
+    training_plan = TrainingPlan.query.get_or_404(training_plan_id)
+    if training_plan.user_id != current_user.id:
+        abort(403)
+    exercise_id = request.form.get('exercise_id', type=int)
+    direction = request.form.get('direction')  # 'up' or 'down'
+    if exercise_id is None or direction not in ('up', 'down'):
+        abort(400)
+
+    # Load current positions
+    rows = db.session.execute(
+        db.text('SELECT exercise_id, position FROM plan_exercises WHERE training_plan_id = :pid ORDER BY COALESCE(position, 999999), exercise_id'),
+        {'pid': training_plan_id}
+    ).fetchall()
+
+    ordered = [(row[0], row[1]) for row in rows]
+
+    # Find the index of the exercise to move
+    idx = None
+    for i, (eid, _) in enumerate(ordered):
+        if eid == exercise_id:
+            idx = i
+            break
+    if idx is None:
+        abort(400)
+
+    # Swap with neighbor
+    if direction == 'up' and idx > 0:
+        ordered[idx], ordered[idx - 1] = ordered[idx - 1], ordered[idx]
+    elif direction == 'down' and idx < len(ordered) - 1:
+        ordered[idx], ordered[idx + 1] = ordered[idx + 1], ordered[idx]
+
+    # Update all positions
+    for pos, (eid, _) in enumerate(ordered):
+        db.session.execute(
+            db.text('UPDATE plan_exercises SET position = :pos WHERE training_plan_id = :pid AND exercise_id = :eid'),
+            {'pos': pos, 'pid': training_plan_id, 'eid': eid}
+        )
+    db.session.commit()
+    return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
+
+
+@app.route('/training_plan/<int:training_plan_id>/share', methods=['POST'])
+@login_required
+def share_training_plan(training_plan_id):
+    training_plan = TrainingPlan.query.get_or_404(training_plan_id)
+    if training_plan.user_id != current_user.id:
+        abort(403)
+    if not training_plan.share_token:
+        training_plan.share_token = str(uuid.uuid4())
+        db.session.commit()
+    share_url = request.url_root.rstrip('/') + url_for('copy_shared_plan', token=training_plan.share_token)
+    flash(f'Share-Link: {share_url}', 'success')
+    return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
+
+
+@app.route('/training_plan/<int:training_plan_id>/unshare', methods=['POST'])
+@login_required
+def unshare_training_plan(training_plan_id):
+    training_plan = TrainingPlan.query.get_or_404(training_plan_id)
+    if training_plan.user_id != current_user.id:
+        abort(403)
+    training_plan.share_token = None
+    db.session.commit()
+    flash('Teilen deaktiviert.', 'info')
+    return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
+
+
+@app.route('/shared/<token>')
+@login_required
+def copy_shared_plan(token):
+    source_plan = TrainingPlan.query.filter_by(share_token=token).first_or_404()
+    if source_plan.user_id == current_user.id:
+        flash('Das ist dein eigener Plan.', 'info')
+        return redirect(url_for('training_plan_detail', training_plan_id=source_plan.id))
+    # Plan kopieren
+    new_plan = TrainingPlan(
+        title=source_plan.title + ' (kopiert)',
+        description=source_plan.description,
+        user_id=current_user.id,
+    )
+    db.session.add(new_plan)
+    db.session.flush()
+    for exercise in source_plan.exercises:
+        new_exercise = Exercise(
+            name=exercise.name,
+            description=exercise.description,
+            video_url=exercise.video_url,
+            muscle_group=exercise.muscle_group,
+            user_id=current_user.id,
+        )
+        db.session.add(new_exercise)
+        db.session.flush()
+        new_plan.exercises.append(new_exercise)
+    db.session.commit()
+    flash(f'Trainingsplan "{source_plan.title}" wurde kopiert!', 'success')
+    return redirect(url_for('training_plan_detail', training_plan_id=new_plan.id))
+
+
+@app.route('/training_plan/<int:training_plan_id>/print')
+@login_required
+def print_training_plan(training_plan_id):
+    training_plan = TrainingPlan.query.get_or_404(training_plan_id)
+    if training_plan.user_id != current_user.id:
+        abort(403)
+    include_sessions = request.args.get('include_sessions', '0') == '1'
+    exercise_overview = []
+    for exercise in training_plan.exercises:
+        user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
+        user_sessions_sorted = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)
+        stats = calculate_exercise_statistics(user_sessions)
+        exercise_overview.append({
+            'exercise': exercise,
+            'summary': stats['summary'],
+            'personal_bests': stats['personal_bests'],
+            'recent_sessions': user_sessions_sorted[:10] if include_sessions else [],
+        })
+    return render_template(
+        'print_training_plan.html',
+        training_plan=training_plan,
+        exercise_overview=exercise_overview,
+        include_sessions=include_sessions,
+        print_date=datetime.datetime.now()
+    )
+
 
 @app.route('/training_plan/<int:training_plan_id>/add_exercise', methods=['GET','POST'])
 @login_required
@@ -727,6 +1474,8 @@ def add_exercise_to_plan(training_plan_id):
             exercise = Exercise(
                 name=form.name.data,
                 description=form.description.data,
+                video_url=form.video_url.data or None,
+                muscle_group=form.muscle_group.data or None,
                 user_id=current_user.id,
             )
             db.session.add(exercise)
@@ -758,6 +1507,11 @@ def add_session(exercise_id):
             form.perceived_exertion.data = last_session.perceived_exertion
             form.notes.data = last_session.notes
     if form.validate_on_submit():
+        # PR-Check vor dem Speichern
+        pr_records = check_new_personal_records(
+            exercise_id, current_user.id,
+            form.weight.data, form.repetitions.data
+        )
         new_session = ExerciseSession(
             exercise_id=exercise_id,
             repetitions=form.repetitions.data,
@@ -770,6 +1524,8 @@ def add_session(exercise_id):
         db.session.add(new_session)
         db.session.commit()
         flash('Satz hinzugefügt!', 'success')
+        for pr in pr_records:
+            flash(pr, 'warning')
         return redirect(url_for('exercise_detail', exercise_id=exercise_id))
     return render_template('add_session.html', form=form, exercise=exercise)
 
@@ -789,6 +1545,7 @@ def exercise_detail(exercise_id):
     sessions = session_query.order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
     stats = calculate_exercise_statistics(all_sessions)
+    progression = calculate_progression_suggestion(all_sessions)
 
     def serialize_session(s):
         return {
@@ -815,6 +1572,7 @@ def exercise_detail(exercise_id):
         summary_metrics=stats['summary'],
         personal_bests=stats['personal_bests'],
         moving_window=stats['moving_window'],
+        progression=progression,
     )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
@@ -831,6 +1589,7 @@ def edit_exercise(exercise_id):
     if form.validate_on_submit():
         exercise.name = form.name.data
         exercise.description = form.description.data
+        exercise.muscle_group = form.muscle_group.data or None
         db.session.commit()
         flash('Übung aktualisiert!', 'success')
         return redirect(url_for('training_plan_detail', training_plan_id=user_plan.id if user_plan else 0))
@@ -1451,6 +2210,9 @@ def api_add_session(exercise_id):
             perceived_exertion = int(perceived_exertion)
         except (TypeError, ValueError):
             return jsonify({'error': 'perceived_exertion must be an integer'}), 400
+    pr_records = check_new_personal_records(
+        exercise_id, current_user.id, int(weight), int(repetitions)
+    )
     new_session = ExerciseSession(
         exercise_id=exercise_id,
         repetitions=repetitions,
@@ -1462,7 +2224,9 @@ def api_add_session(exercise_id):
     )
     db.session.add(new_session)
     db.session.commit()
-    return jsonify({'id': new_session.id}), 201
+    for pr in pr_records:
+        flash(pr, 'warning')
+    return jsonify({'id': new_session.id, 'personal_records': pr_records}), 201
 
 
 app.register_blueprint(api_bp)

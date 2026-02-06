@@ -4,7 +4,171 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>{% block title %}Gewichts-Tracker{% endblock %}</title>
+    <!-- PWA / Add to Home Screen -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FitnessApp">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+      /* Dark Mode Styles */
+      [data-theme="dark"] {
+        --bg-color: #1a1a2e;
+        --bg-secondary: #16213e;
+        --text-color: #eaeaea;
+        --text-muted: #a0a0a0;
+        --border-color: #333;
+        --card-bg: #16213e;
+        --input-bg: #0f3460;
+        --input-border: #444;
+      }
+      [data-theme="dark"] body {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+      }
+      [data-theme="dark"] .bg-light {
+        background-color: var(--bg-secondary) !important;
+      }
+      [data-theme="dark"] .card, [data-theme="dark"] .list-group-item {
+        background-color: var(--card-bg) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-color) !important;
+      }
+      [data-theme="dark"] .card-header {
+        background-color: var(--bg-secondary) !important;
+        border-color: var(--border-color) !important;
+      }
+      [data-theme="dark"] .form-control {
+        background-color: var(--input-bg) !important;
+        border-color: var(--input-border) !important;
+        color: var(--text-color) !important;
+      }
+      [data-theme="dark"] .form-control:focus {
+        background-color: var(--input-bg) !important;
+        color: var(--text-color) !important;
+      }
+      [data-theme="dark"] .table {
+        color: var(--text-color) !important;
+      }
+      [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(255,255,255,0.05) !important;
+      }
+      [data-theme="dark"] .text-muted {
+        color: var(--text-muted) !important;
+      }
+      [data-theme="dark"] .border-top {
+        border-color: var(--border-color) !important;
+      }
+      [data-theme="dark"] a {
+        color: #6eb5ff;
+      }
+      /* Button Styles für Dark Mode */
+      [data-theme="dark"] .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-secondary {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-success {
+        background-color: #198754;
+        border-color: #198754;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-danger {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-warning {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #000 !important;
+      }
+      [data-theme="dark"] .btn-info {
+        background-color: #0dcaf0;
+        border-color: #0dcaf0;
+        color: #000 !important;
+      }
+      [data-theme="dark"] .btn-outline-primary {
+        color: #6eb5ff !important;
+        border-color: #6eb5ff;
+      }
+      [data-theme="dark"] .btn-outline-primary:hover {
+        background-color: #0d6efd;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-outline-secondary {
+        color: #ccc !important;
+        border-color: #6c757d;
+      }
+      [data-theme="dark"] .btn-outline-secondary:hover {
+        background-color: #6c757d;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-outline-success {
+        color: #5cb85c !important;
+        border-color: #5cb85c;
+      }
+      [data-theme="dark"] .btn-outline-success:hover {
+        background-color: #198754;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-outline-info {
+        color: #5bc0de !important;
+        border-color: #5bc0de;
+      }
+      [data-theme="dark"] .btn-outline-info:hover {
+        background-color: #0dcaf0;
+        color: #000 !important;
+      }
+      [data-theme="dark"] .btn-outline-warning {
+        color: #ffc107 !important;
+        border-color: #ffc107;
+      }
+      [data-theme="dark"] .btn-outline-warning:hover {
+        background-color: #ffc107;
+        color: #000 !important;
+      }
+      [data-theme="dark"] .btn-outline-danger {
+        color: #ff6b6b !important;
+        border-color: #ff6b6b;
+      }
+      [data-theme="dark"] .btn-outline-danger:hover {
+        background-color: #dc3545;
+        color: #fff !important;
+      }
+      [data-theme="dark"] .btn-sm {
+        color: inherit;
+      }
+      [data-theme="dark"] .alert-info {
+        background-color: #0f3460;
+        border-color: #1a4a7a;
+        color: #8ecae6;
+      }
+      [data-theme="dark"] .dropdown-menu {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+      }
+      [data-theme="dark"] .dropdown-item {
+        color: var(--text-color);
+      }
+      [data-theme="dark"] .dropdown-item:hover {
+        background-color: var(--bg-secondary);
+      }
+      /* Dark mode toggle button */
+      .dark-mode-toggle {
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+      }
+    </style>
     {% block extra_head %}{% endblock %}
   </head>
   <body class="d-flex flex-column min-vh-100">
@@ -13,7 +177,7 @@
     </main>
     <footer class="bg-light border-top py-3 mt-auto">
       <div class="container">
-        <nav class="d-flex flex-wrap justify-content-center">
+        <nav class="d-flex flex-wrap justify-content-center align-items-center">
           {% if footer_pages or footer_links %}
             {% for page in footer_pages %}
               <a href="{{ url_for('view_footer_page', page_id=page.id) }}" class="text-muted small mx-2 my-1">{{ page.title }}</a>
@@ -24,6 +188,7 @@
           {% else %}
             <span class="text-muted small">&copy; {{ config.get('APP_NAME', 'Gewichts-Tracker') }}</span>
           {% endif %}
+          <span class="dark-mode-toggle text-muted small mx-2 my-1" id="darkModeToggle" title="Dark Mode umschalten">🌙</span>
         </nav>
       </div>
     </footer>
@@ -33,13 +198,53 @@
       // Service Worker Registration auf allen Seiten
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/static/sw.js').then(function (registration) {
+          navigator.serviceWorker.register('/sw.js').then(function (registration) {
             console.log('ServiceWorker registration successful with scope: ', registration.scope);
           }, function (err) {
             console.log('ServiceWorker registration failed: ', err);
           });
         });
       }
+
+      // Dark Mode Toggle
+      (function() {
+        const toggle = document.getElementById('darkModeToggle');
+        const html = document.documentElement;
+
+        // Lade gespeicherte Präferenz oder System-Präferenz
+        function getPreferredTheme() {
+          const stored = localStorage.getItem('theme');
+          if (stored) return stored;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function setTheme(theme) {
+          html.setAttribute('data-theme', theme);
+          localStorage.setItem('theme', theme);
+          if (toggle) {
+            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+            toggle.title = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+          }
+        }
+
+        // Initialisiere Theme
+        setTheme(getPreferredTheme());
+
+        // Toggle Event
+        if (toggle) {
+          toggle.addEventListener('click', function() {
+            const current = html.getAttribute('data-theme');
+            setTheme(current === 'dark' ? 'light' : 'dark');
+          });
+        }
+
+        // System-Präferenz Änderung beobachten
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      })();
     </script>
     {% block extra_scripts %}{% endblock %}
   </body>

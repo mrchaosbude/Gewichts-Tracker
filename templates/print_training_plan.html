@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ training_plan.title }} - Druckansicht</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.4;
+            margin: 0;
+            padding: 20px;
+            color: #000;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 24pt;
+        }
+        .header .description {
+            color: #666;
+            font-style: italic;
+        }
+        .header .print-date {
+            font-size: 10pt;
+            color: #999;
+            margin-top: 10px;
+        }
+        .exercise {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+        .exercise h2 {
+            font-size: 14pt;
+            margin: 0 0 5px 0;
+            padding: 8px;
+            background: #f0f0f0;
+            border-left: 4px solid #333;
+        }
+        .exercise .description {
+            color: #666;
+            font-size: 11pt;
+            margin: 5px 0 10px 12px;
+        }
+        .exercise .video-link {
+            font-size: 10pt;
+            color: #0066cc;
+            margin: 5px 0 10px 12px;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 11pt;
+        }
+        .stats-table th, .stats-table td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .stats-table th {
+            background: #f5f5f5;
+            font-weight: bold;
+            width: 40%;
+        }
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .log-table th, .log-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+        .log-table th {
+            background: #f5f5f5;
+        }
+        .log-table td {
+            height: 30px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+            text-align: center;
+            font-size: 10pt;
+            color: #999;
+        }
+        .no-print {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .no-print button {
+            padding: 10px 30px;
+            font-size: 14pt;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        @media print {
+            .no-print {
+                display: none;
+            }
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()">Drucken / Als PDF speichern</button>
+        <button onclick="window.close()">Schliessen</button>
+    </div>
+
+    <div class="header">
+        <h1>{{ training_plan.title }}</h1>
+        {% if training_plan.description %}
+            <div class="description">{{ training_plan.description }}</div>
+        {% endif %}
+        <div class="print-date">Erstellt am: {{ print_date.strftime('%d.%m.%Y %H:%M') }}</div>
+    </div>
+
+    {% for item in exercise_overview %}
+    <div class="exercise">
+        <h2>{{ loop.index }}. {{ item.exercise.name }}</h2>
+        {% if item.exercise.description %}
+            <div class="description">{{ item.exercise.description }}</div>
+        {% endif %}
+        {% if item.exercise.video_url %}
+            <div class="video-link">Video: {{ item.exercise.video_url }}</div>
+        {% endif %}
+
+        {% if item.summary.total_sessions > 0 %}
+        <table class="stats-table">
+            <tr>
+                <th>Letzte Einheit</th>
+                <td>{{ item.summary.latest_session.weight }} kg x {{ item.summary.latest_session.repetitions }} Wdh.</td>
+            </tr>
+            {% if item.personal_bests.max_weight %}
+            <tr>
+                <th>Max. Gewicht</th>
+                <td>{{ item.personal_bests.max_weight.value }} kg ({{ item.personal_bests.max_weight.timestamp.strftime('%d.%m.%Y') }})</td>
+            </tr>
+            {% endif %}
+            {% if item.personal_bests.max_one_rm %}
+            <tr>
+                <th>Geschätzte 1RM</th>
+                <td>{{ item.personal_bests.max_one_rm.value|round(1) }} kg</td>
+            </tr>
+            {% endif %}
+        </table>
+        {% endif %}
+
+        {% if include_sessions and item.recent_sessions %}
+        <!-- Tabelle mit bisherigen Einheiten -->
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Datum</th>
+                    <th style="width: 20%;">Gewicht (kg)</th>
+                    <th style="width: 20%;">Wiederholungen</th>
+                    <th style="width: 40%;">Notizen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in item.recent_sessions %}
+                <tr>
+                    <td>{{ session.timestamp.strftime('%d.%m.%Y') }}</td>
+                    <td>{{ session.weight }}</td>
+                    <td>{{ session.repetitions }}</td>
+                    <td style="text-align: left;">{{ session.notes or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <!-- Leere Tabelle zum Eintragen -->
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Satz</th>
+                    <th style="width: 25%;">Gewicht (kg)</th>
+                    <th style="width: 25%;">Wiederholungen</th>
+                    <th style="width: 35%;">Notizen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in range(5) %}
+                <tr>
+                    <td>{{ i + 1 }}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="footer">
+        Gewichts-Tracker - {{ training_plan.title }}
+    </div>
+</body>
+</html>

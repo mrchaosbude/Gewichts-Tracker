@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Achievements{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .badge-card {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      transition: transform 0.2s;
+    }
+    .badge-card:hover {
+      transform: scale(1.03);
+    }
+    .badge-card.earned {
+      background: linear-gradient(135deg, #ffd700 0%, #ffec80 100%);
+      border: 2px solid #daa520;
+      color: #333;
+    }
+    .badge-card.locked {
+      background: #e9ecef;
+      border: 2px solid #dee2e6;
+      color: #999;
+    }
+    .badge-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .badge-card h6 {
+      margin-bottom: 0.25rem;
+      font-weight: 700;
+    }
+    .badge-card .badge-desc {
+      font-size: 0.8rem;
+    }
+    .progress-summary {
+      font-size: 0.9rem;
+    }
+    [data-theme="dark"] .badge-card.earned {
+      background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%);
+      border-color: #daa520;
+      color: #fff;
+    }
+    [data-theme="dark"] .badge-card.locked {
+      background: #1a1a2e;
+      border-color: #444;
+      color: #666;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-3">Achievements</h2>
+
+    <div class="row text-center mb-4">
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Freigeschaltet</div>
+            <h5 class="mb-0">{{ earned|length }} / {{ earned|length + locked|length }}</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Sätze</div>
+            <h5 class="mb-0">{{ total_sessions }}</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Trainingstage</div>
+            <h5 class="mb-0">{{ training_days }}</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if earned %}
+    <h4 class="mb-3">Freigeschaltet</h4>
+    <div class="row">
+      {% for badge in earned %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="badge-card earned">
+          <div class="badge-icon">&#127942;</div>
+          <h6>{{ badge.name }}</h6>
+          <div class="badge-desc">{{ badge.description }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if locked %}
+    <h4 class="mb-3 mt-2">Noch gesperrt</h4>
+    <div class="row">
+      {% for badge in locked %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="badge-card locked">
+          <div class="badge-icon">&#128274;</div>
+          <h6>{{ badge.name }}</h6>
+          <div class="badge-desc">{{ badge.description }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+  </div>
+{% endblock %}

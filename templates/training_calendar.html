@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}Trainings-Kalender{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .calendar-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .calendar-table th {
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 0.85rem;
+      border-bottom: 2px solid #dee2e6;
+    }
+    .calendar-table td {
+      text-align: center;
+      padding: 6px;
+      height: 70px;
+      vertical-align: top;
+      border: 1px solid #dee2e6;
+      position: relative;
+      cursor: pointer;
+    }
+    .calendar-table td.empty {
+      background: #f8f9fa;
+      cursor: default;
+    }
+    .calendar-table td .day-num {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .calendar-table td .day-count {
+      font-size: 0.7rem;
+      margin-top: 2px;
+    }
+    .calendar-table td .day-label {
+      font-size: 0.65rem;
+      color: #007bff;
+      font-weight: 600;
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .calendar-table td.today {
+      border: 2px solid #007bff;
+    }
+    .calendar-table td.planned {
+      border-bottom: 3px solid #007bff;
+    }
+    .calendar-table td.planned.done {
+      border-bottom-color: #28a745;
+    }
+    .heat-0 { background-color: transparent; }
+    .heat-1 { background-color: rgba(40, 167, 69, 0.15); }
+    .heat-2 { background-color: rgba(40, 167, 69, 0.35); }
+    .heat-3 { background-color: rgba(40, 167, 69, 0.55); }
+    .heat-4 { background-color: rgba(40, 167, 69, 0.75); }
+    .nav-month {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    /* Plan-Popup */
+    .plan-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      z-index: 1050;
+      width: 300px;
+      box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.3);
+    }
+    .plan-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 1040;
+    }
+    .legend {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      margin-top: 0.75rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      border: 1px solid #dee2e6;
+    }
+    [data-theme="dark"] .calendar-table td.empty {
+      background: #1a1a2e;
+    }
+    [data-theme="dark"] .calendar-table td {
+      border-color: #444;
+    }
+    [data-theme="dark"] .calendar-table th {
+      border-color: #444;
+    }
+    [data-theme="dark"] .heat-1 { background-color: rgba(40, 167, 69, 0.2); }
+    [data-theme="dark"] .heat-2 { background-color: rgba(40, 167, 69, 0.35); }
+    [data-theme="dark"] .heat-3 { background-color: rgba(40, 167, 69, 0.5); }
+    [data-theme="dark"] .heat-4 { background-color: rgba(40, 167, 69, 0.7); }
+    [data-theme="dark"] .plan-popup {
+      background: #16213e;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    [data-theme="dark"] .plan-popup .form-control {
+      background: #0f3460;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    [data-theme="dark"] .day-label {
+      color: #6eb5ff;
+    }
+    [data-theme="dark"] .legend-swatch {
+      border-color: #444;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-3">Trainings-Kalender</h2>
+
+    <div class="nav-month">
+      <a href="{{ url_for('training_calendar', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary btn-sm">&larr; Zurück</a>
+      <h4 class="mb-0">{{ month_name }} {{ year }}</h4>
+      <a href="{{ url_for('training_calendar', year=next_year, month=next_month) }}" class="btn btn-outline-secondary btn-sm">Weiter &rarr;</a>
+    </div>
+
+    <div class="row text-center mb-3">
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Trainingstage</div>
+            <h5 class="mb-0">{{ training_days }}</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Sätze</div>
+            <h5 class="mb-0">{{ total_sessions }}</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card shadow-sm">
+          <div class="card-body py-2">
+            <div class="small text-muted">Volumen</div>
+            <h5 class="mb-0">{{ total_volume }} kg</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="calendar-table">
+        <thead>
+          <tr>
+            <th>Mo</th>
+            <th>Di</th>
+            <th>Mi</th>
+            <th>Do</th>
+            <th>Fr</th>
+            <th>Sa</th>
+            <th>So</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for week in calendar_weeks %}
+          <tr>
+            {% for day in week %}
+              {% if day.day == 0 %}
+                <td class="empty"></td>
+              {% else %}
+                {% set intensity = (day.count / max_count * 4)|int if day.count > 0 else 0 %}
+                {% if intensity > 4 %}{% set intensity = 4 %}{% endif %}
+                <td class="heat-{{ intensity }}{% if day.is_today %} today{% endif %}{% if day.planned %} planned{% if day.count > 0 %} done{% endif %}{% endif %}"
+                    onclick="openPlanPopup('{{ day.date_str }}', '{{ day.label or '' }}', {{ 'true' if day.planned else 'false' }})">
+                  <div class="day-num">{{ day.day }}</div>
+                  {% if day.count > 0 %}
+                    <div class="day-count">{{ day.count }} Sätze</div>
+                  {% endif %}
+                  {% if day.planned and day.label %}
+                    <div class="day-label" title="{{ day.label }}">{{ day.label }}</div>
+                  {% elif day.planned %}
+                    <div class="day-label">geplant</div>
+                  {% endif %}
+                </td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="border-bottom: 3px solid #007bff;"></div> Geplant</div>
+      <div class="legend-item"><div class="legend-swatch" style="background: rgba(40,167,69,0.35);"></div> Trainiert</div>
+      <div class="legend-item"><div class="legend-swatch" style="background: rgba(40,167,69,0.35); border-bottom: 3px solid #28a745;"></div> Geplant + Trainiert</div>
+    </div>
+
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+  </div>
+
+  <!-- Plan Popup -->
+  <div class="plan-overlay" id="planOverlay" onclick="closePlanPopup()"></div>
+  <div class="plan-popup" id="planPopup">
+    <h5 id="planPopupTitle" class="mb-3"></h5>
+    <form id="planForm" method="POST">
+      <input type="hidden" name="date" id="planDate">
+      <div class="form-group">
+        <label for="planLabel">Bezeichnung (optional)</label>
+        <input type="text" class="form-control" id="planLabel" name="label" placeholder="z.B. Push, Pull, Beine...">
+      </div>
+      <div id="planButtons"></div>
+    </form>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    function openPlanPopup(dateStr, label, isPlanned) {
+      document.getElementById('planOverlay').style.display = 'block';
+      document.getElementById('planPopup').style.display = 'block';
+      document.getElementById('planDate').value = dateStr;
+      document.getElementById('planLabel').value = label;
+
+      var parts = dateStr.split('-');
+      var title = parts[2] + '.' + parts[1] + '.' + parts[0];
+      document.getElementById('planPopupTitle').textContent = title;
+
+      var btns = '';
+      if (isPlanned) {
+        btns += '<button type="submit" class="btn btn-primary btn-block mb-2" formaction="{{ url_for("plan_training_day") }}">Aktualisieren</button>';
+        btns += '<button type="submit" class="btn btn-outline-danger btn-block" formaction="{{ url_for("unplan_training_day") }}">Planung entfernen</button>';
+      } else {
+        btns += '<button type="submit" class="btn btn-primary btn-block" formaction="{{ url_for("plan_training_day") }}">Training planen</button>';
+      }
+      document.getElementById('planButtons').innerHTML = btns;
+    }
+
+    function closePlanPopup() {
+      document.getElementById('planOverlay').style.display = 'none';
+      document.getElementById('planPopup').style.display = 'none';
+    }
+
+    // ESC schließt Popup
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closePlanPopup();
+    });
+  </script>
+{% endblock %}

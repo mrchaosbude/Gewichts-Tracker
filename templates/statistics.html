@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiken{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h2 class="mb-4">Statistiken</h2>
+
+    <!-- Wochenvergleich -->
+    <div class="card mb-4">
+      <div class="card-header"><strong>Wochenvergleich</strong></div>
+      <div class="card-body">
+        <div class="row text-center mb-3">
+          <div class="col-6">
+            <div class="small text-muted">Letzte Woche</div>
+            <h5>{{ last_week_sets }} Sätze</h5>
+            <div class="text-muted">{{ last_week_volume }} kg Volumen</div>
+          </div>
+          <div class="col-6">
+            <div class="small text-muted">Diese Woche</div>
+            <h5>{{ this_week_sets }} Sätze</h5>
+            <div class="text-muted">{{ this_week_volume }} kg Volumen</div>
+          </div>
+        </div>
+        <div class="text-center mb-3">
+          {% if volume_diff > 0 %}
+            <span class="badge badge-success p-2">+{{ volume_diff }} kg Volumen / +{{ sets_diff }} Sätze</span>
+          {% elif volume_diff < 0 %}
+            <span class="badge badge-danger p-2">{{ volume_diff }} kg Volumen / {{ sets_diff }} Sätze</span>
+          {% else %}
+            <span class="badge badge-secondary p-2">Gleiches Volumen</span>
+          {% endif %}
+        </div>
+        {% if exercise_comparison %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Übung</th>
+                <th class="text-center">Letzte Wo.</th>
+                <th class="text-center">Diese Wo.</th>
+                <th class="text-center">Diff.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ec in exercise_comparison %}
+              <tr>
+                <td>{{ ec.name }}</td>
+                <td class="text-center">{{ ec.last_week.max_weight }}kg &times; {{ ec.last_week.sets }}</td>
+                <td class="text-center">{{ ec.this_week.max_weight }}kg &times; {{ ec.this_week.sets }}</td>
+                <td class="text-center">
+                  {% if ec.weight_diff > 0 %}
+                    <span class="text-success">+{{ ec.weight_diff }}kg</span>
+                  {% elif ec.weight_diff < 0 %}
+                    <span class="text-danger">{{ ec.weight_diff }}kg</span>
+                  {% else %}
+                    <span class="text-muted">=</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Muskelgruppen-Volumen -->
+    <div class="card mb-4">
+      <div class="card-header"><strong>Volumen pro Muskelgruppe</strong></div>
+      <div class="card-body">
+        {% if muscle_labels %}
+          <div style="height: 300px;">
+            <canvas id="muscleChart"></canvas>
+          </div>
+        {% else %}
+          <p class="text-muted">Noch keine Daten vorhanden. Weise deinen Übungen Muskelgruppen zu.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Trainingsfrequenz -->
+    <div class="card mb-4">
+      <div class="card-header"><strong>Trainingsfrequenz (letzte 12 Wochen)</strong></div>
+      <div class="card-body">
+        <div style="height: 250px;">
+          <canvas id="frequencyChart"></canvas>
+        </div>
+        <div class="table-responsive mt-3">
+          <table class="table table-sm text-center">
+            <thead>
+              <tr>
+                <th>Woche ab</th>
+                {% for f in frequency_data %}
+                  <th>{{ f.label }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-left"><strong>Tage</strong></td>
+                {% for f in frequency_data %}
+                  <td>{{ f.days }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td class="text-left"><strong>Sätze</strong></td>
+                {% for f in frequency_data %}
+                  <td>{{ f.sets }}</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block mt-3">Zurück zum Dashboard</a>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Muskelgruppen-Chart
+    {% if muscle_labels %}
+    const muscleCtx = document.getElementById('muscleChart').getContext('2d');
+    const colors = [
+      '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8',
+      '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6c757d', '#343a40'
+    ];
+    new Chart(muscleCtx, {
+      type: 'doughnut',
+      data: {
+        labels: {{ muscle_labels|tojson }},
+        datasets: [{
+          data: {{ muscle_values|tojson }},
+          backgroundColor: colors.slice(0, {{ muscle_labels|length }}),
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.label + ': ' + context.parsed.toLocaleString('de-DE') + ' kg';
+              }
+            }
+          }
+        }
+      }
+    });
+    {% endif %}
+
+    // Trainingsfrequenz-Chart
+    const freqCtx = document.getElementById('frequencyChart').getContext('2d');
+    const freqData = {{ frequency_data|tojson }};
+    new Chart(freqCtx, {
+      type: 'bar',
+      data: {
+        labels: freqData.map(f => f.label),
+        datasets: [
+          {
+            label: 'Trainingstage',
+            data: freqData.map(f => f.days),
+            backgroundColor: 'rgba(40, 167, 69, 0.7)',
+            yAxisID: 'yDays',
+          },
+          {
+            label: 'Volumen (kg)',
+            data: freqData.map(f => f.volume),
+            type: 'line',
+            borderColor: 'rgba(0, 123, 255, 1)',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            fill: true,
+            tension: 0.2,
+            yAxisID: 'yVolume',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          yDays: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Tage' },
+            beginAtZero: true,
+            max: 7,
+            ticks: { stepSize: 1 }
+          },
+          yVolume: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Volumen (kg)' },
+            beginAtZero: true,
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+  </script>
+{% endblock %}

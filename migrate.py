@@ -115,6 +115,11 @@ def run_migration(database_uri: str | None, dry_run: bool) -> None:
         altered = False
         altered |= add_column_if_missing("exercise", "user_id", "INTEGER")
         altered |= add_column_if_missing("exercise_session", "user_id", "INTEGER")
+        altered |= add_column_if_missing("exercise", "video_url", "VARCHAR(500)")
+        altered |= add_column_if_missing("plan_exercises", "superset_group", "INTEGER")
+        altered |= add_column_if_missing("exercise", "muscle_group", "VARCHAR(50)")
+        altered |= add_column_if_missing("training_plan", "share_token", "VARCHAR(36)")
+        altered |= add_column_if_missing("plan_exercises", "position", "INTEGER")
 
         # Backfill ownership information so that historical data stays accessible.
         exercise_updates = backfill_exercise_owners()
