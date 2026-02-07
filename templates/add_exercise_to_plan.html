@@ -2,6 +2,37 @@
 
 {% block title %}Übung hinzufügen{% endblock %}
 
+{% block extra_head %}
+  <style>
+    .separator-check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 0.75rem;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .separator-check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+    .separator-hint {
+      font-size: 0.78rem;
+      color: #6c757d;
+      font-weight: 400;
+      margin-left: 0.25rem;
+    }
+    [data-theme="dark"] .separator-check {
+      background: #0f3460;
+      border-color: #444;
+      color: #eaeaea;
+    }
+    [data-theme="dark"] .separator-hint { color: #a0a0a0; }
+  </style>
+{% endblock %}
+
 {% block content %}
   <div class="page-wrap">
     <h2 class="page-title">Übung hinzufügen</h2>
@@ -9,29 +40,38 @@
     <div class="s-card">
       <form method="POST">
         {{ form.hidden_tag() }}
-        <div class="form-group">
-          <label class="small font-weight-bold" for="existing_exercise">Vorhandene Übung verwenden</label>
-          <select name="existing_exercise_id" class="form-control">
-            <option value="">-- Neue Übung erstellen --</option>
-            {% for ex in existing_exercises %}
-              <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}" data-video="{{ ex.video_url or '' }}">{{ ex.name }}</option>
-            {% endfor %}
-          </select>
+
+        <label class="separator-check" for="is_separator">
+          {{ form.is_separator(id="is_separator") }}
+          <span>Trenner / Abschnitt</span>
+          <span class="separator-hint">(kein Exercise, nur visuelle Trennung)</span>
+        </label>
+
+        <div id="exerciseFields">
+          <div class="form-group" id="existingGroup">
+            <label class="small font-weight-bold" for="existing_exercise">Vorhandene Übung verwenden</label>
+            <select name="existing_exercise_id" class="form-control">
+              <option value="">-- Neue Übung erstellen --</option>
+              {% for ex in existing_exercises %}
+                <option value="{{ ex.id }}" data-name="{{ ex.name }}" data-description="{{ ex.description or '' }}" data-video="{{ ex.video_url or '' }}">{{ ex.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            {{ form.name.label(class="small font-weight-bold") }} {{ form.name(class="form-control") }}
+          </div>
+          <div class="form-group" id="descGroup">
+            {{ form.description.label(class="small font-weight-bold") }} {{ form.description(class="form-control") }}
+          </div>
+          <div class="form-group" id="videoGroup">
+            {{ form.video_url.label(class="small font-weight-bold") }} {{ form.video_url(class="form-control", placeholder="https://youtube.com/watch?v=...") }}
+            <small class="form-text text-muted">Link zu einem Video oder einer Anleitung</small>
+          </div>
+          <div class="form-group" id="muscleGroup">
+            {{ form.muscle_group.label(class="small font-weight-bold") }} {{ form.muscle_group(class="form-control") }}
+          </div>
         </div>
-        <div class="form-group">
-          {{ form.name.label(class="small font-weight-bold") }} {{ form.name(class="form-control") }}
-        </div>
-        <div class="form-group">
-          {{ form.description.label(class="small font-weight-bold") }} {{ form.description(class="form-control") }}
-        </div>
-        <div class="form-group">
-          {{ form.video_url.label(class="small font-weight-bold") }} {{ form.video_url(class="form-control", placeholder="https://youtube.com/watch?v=...") }}
-          <small class="form-text text-muted">Link zu einem Video oder einer Anleitung</small>
-        </div>
-        <div class="form-group">
-          {{ form.muscle_group.label(class="small font-weight-bold") }} {{ form.muscle_group(class="form-control") }}
-        </div>
-        {{ form.submit(class="btn btn-primary btn-block") }}
+        {{ form.submit(class="btn btn-primary btn-block", id="submitBtn") }}
       </form>
     </div>
     <a href="{{ url_for('training_plan_detail', training_plan_id=training_plan.id) }}" class="back-link">&larr; Zurück zum Plan</a>
@@ -43,11 +83,18 @@
     document.addEventListener('DOMContentLoaded', function() {
       const select = document.querySelector('select[name="existing_exercise_id"]');
       const nameInput = document.getElementById('name');
+      const nameLabel = nameInput.previousElementSibling;
       const descInput = document.getElementById('description');
       const videoInput = document.getElementById('video_url');
+      const sepCheck = document.getElementById('is_separator');
+      const existingGroup = document.getElementById('existingGroup');
+      const descGroup = document.getElementById('descGroup');
+      const videoGroup = document.getElementById('videoGroup');
+      const muscleGroup = document.getElementById('muscleGroup');
+      const submitBtn = document.getElementById('submitBtn');
 
       function fillFields() {
-        const option = select.options[select.selectedIndex];
+        var option = select.options[select.selectedIndex];
         if (option && option.value) {
           nameInput.value = option.dataset.name || '';
           descInput.value = option.dataset.description || '';
@@ -59,8 +106,26 @@
         }
       }
 
+      function toggleSeparatorMode() {
+        var isSep = sepCheck.checked;
+        existingGroup.style.display = isSep ? 'none' : '';
+        descGroup.style.display = isSep ? 'none' : '';
+        videoGroup.style.display = isSep ? 'none' : '';
+        muscleGroup.style.display = isSep ? 'none' : '';
+        nameLabel.textContent = isSep ? 'Bezeichnung' : 'Übungsname';
+        nameInput.placeholder = isSep ? 'z.B. Beine, Push, Tag 1...' : '';
+        submitBtn.value = isSep ? 'Trenner hinzufügen' : 'Übung hinzufügen';
+        if (isSep) {
+          select.selectedIndex = 0;
+          descInput.value = '';
+          videoInput.value = '';
+        }
+      }
+
       select.addEventListener('change', fillFields);
+      sepCheck.addEventListener('change', toggleSeparatorMode);
       fillFields();
+      toggleSeparatorMode();
     });
   </script>
 {% endblock %}

@@ -106,6 +106,7 @@ class Exercise(db.Model):
     description = db.Column(db.String(300), nullable=True)
     video_url = db.Column(db.String(500), nullable=True)
     muscle_group = db.Column(db.String(50), nullable=True)
+    is_separator = db.Column(db.Boolean, default=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
     training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
@@ -133,6 +134,7 @@ class TemplateExercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.String(300), nullable=True)  # Beschreibung bei Template-Übung
+    is_separator = db.Column(db.Boolean, default=False)
     template_plan_id = db.Column(db.Integer, db.ForeignKey('template_training_plan.id'), nullable=False)
 
 
@@ -257,6 +259,7 @@ class TrainingPlanForm(FlaskForm):
     submit = SubmitField('Trainingsplan speichern')
 
 class ExerciseTemplateForm(FlaskForm):
+    is_separator = BooleanField('Als Trenner/Abschnitt hinzufügen')
     name = StringField('Übungsname', validators=[DataRequired()])
     description = StringField('Beschreibung (optional)')
     video_url = StringField('Video/Anleitung URL (optional)')
@@ -420,6 +423,22 @@ def parse_training_plan_markdown(content: str) -> dict:
             in_plan_description = True
             continue
 
+        # Check for separator (---Label)
+        if stripped.startswith('---') and len(stripped) > 3 and not stripped.startswith('----'):
+            # Save previous exercise if exists
+            if current_exercise:
+                desc = '\n'.join(current_exercise_desc_lines).strip()
+                if len(desc) > 300:
+                    errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
+                exercises.append({'name': current_exercise, 'description': desc[:300], 'is_separator': False})
+                current_exercise = None
+                current_exercise_desc_lines = []
+            separator_label = stripped[3:].strip()
+            if separator_label:
+                exercises.append({'name': separator_label, 'description': '', 'is_separator': True})
+            in_plan_description = False
+            continue
+
         # Check for H2 (exercise)
         if stripped.startswith('## '):
             # Save previous exercise if exists
@@ -427,7 +446,7 @@ def parse_training_plan_markdown(content: str) -> dict:
                 desc = '\n'.join(current_exercise_desc_lines).strip()
                 if len(desc) > 300:
                     errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
-                exercises.append({'name': current_exercise, 'description': desc[:300]})
+                exercises.append({'name': current_exercise, 'description': desc[:300], 'is_separator': False})
 
             current_exercise = stripped[3:].strip()
             if len(current_exercise) > 150:
@@ -447,13 +466,14 @@ def parse_training_plan_markdown(content: str) -> dict:
         desc = '\n'.join(current_exercise_desc_lines).strip()
         if len(desc) > 300:
             errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
-        exercises.append({'name': current_exercise, 'description': desc[:300]})
+        exercises.append({'name': current_exercise, 'description': desc[:300], 'is_separator': False})
 
     # Validate required fields
     if not plan_title:
         errors.append("Kein Plantitel gefunden. Beginne mit '# Titel'.")
 
-    if not exercises:
+    real_exercises = [e for e in exercises if not e.get('is_separator')]
+    if not real_exercises:
         errors.append("Keine Übungen gefunden. Füge Übungen mit '## Übungsname' hinzu.")
 
     plan_description = '\n'.join(plan_description_lines).strip()
@@ -1294,7 +1314,8 @@ def import_training_plan():
         for ex_data in parsed['exercises']:
             exercise = Exercise(
                 name=ex_data['name'],
-                description=ex_data['description'],
+                description=ex_data['description'] if not ex_data.get('is_separator') else None,
+                is_separator=ex_data.get('is_separator', False),
                 user_id=current_user.id
             )
             db.session.add(exercise)
@@ -1334,6 +1355,17 @@ def training_plan_detail(training_plan_id):
     sorted_exercises = sorted(training_plan.exercises, key=lambda ex: (position_map.get(ex.id, 999999), ex.id))
     exercise_overview = []
     for exercise in sorted_exercises:
+        if exercise.is_separator:
+            exercise_overview.append({
+                'exercise': exercise,
+                'summary': None,
+                'personal_bests': None,
+                'recent_sessions': [],
+                'moving_window': 5,
+                'superset_group': None,
+                'is_separator': True,
+            })
+            continue
         user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
         stats = calculate_exercise_statistics(user_sessions)
         recent_sessions = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
@@ -1344,6 +1376,7 @@ def training_plan_detail(training_plan_id):
             'recent_sessions': recent_sessions,
             'moving_window': stats['moving_window'],
             'superset_group': superset_map.get(exercise.id),
+            'is_separator': False,
         })
     return render_template(
         'training_plan_detail.html',
@@ -1470,6 +1503,7 @@ def copy_shared_plan(token):
             description=exercise.description,
             video_url=exercise.video_url,
             muscle_group=exercise.muscle_group,
+            is_separator=exercise.is_separator,
             user_id=current_user.id,
         )
         db.session.add(new_exercise)
@@ -1489,6 +1523,15 @@ def print_training_plan(training_plan_id):
     include_sessions = request.args.get('include_sessions', '0') == '1'
     exercise_overview = []
     for exercise in training_plan.exercises:
+        if exercise.is_separator:
+            exercise_overview.append({
+                'exercise': exercise,
+                'summary': None,
+                'personal_bests': None,
+                'recent_sessions': [],
+                'is_separator': True,
+            })
+            continue
         user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
         user_sessions_sorted = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)
         stats = calculate_exercise_statistics(user_sessions)
@@ -1497,6 +1540,7 @@ def print_training_plan(training_plan_id):
             'summary': stats['summary'],
             'personal_bests': stats['personal_bests'],
             'recent_sessions': user_sessions_sorted[:10] if include_sessions else [],
+            'is_separator': False,
         })
     return render_template(
         'print_training_plan.html',
@@ -1518,30 +1562,40 @@ def add_exercise_to_plan(training_plan_id):
         Exercise.query
         .join(Exercise.training_plans)
         .filter(TrainingPlan.user_id == current_user.id)
+        .filter(Exercise.is_separator != True)
         .order_by(Exercise.name)
         .distinct()
         .all()
     )
     if form.validate_on_submit():
-        selected_id = request.form.get('existing_exercise_id')
-        if selected_id:
-            exercise = Exercise.query.get_or_404(int(selected_id))
-            if not any(p.user_id == current_user.id for p in exercise.training_plans):
-                abort(403)
-        else:
+        if form.is_separator.data:
             exercise = Exercise(
                 name=form.name.data,
-                description=form.description.data,
-                video_url=form.video_url.data or None,
-                muscle_group=form.muscle_group.data or None,
+                is_separator=True,
                 user_id=current_user.id,
             )
             db.session.add(exercise)
             db.session.flush()
+        else:
+            selected_id = request.form.get('existing_exercise_id')
+            if selected_id:
+                exercise = Exercise.query.get_or_404(int(selected_id))
+                if not any(p.user_id == current_user.id for p in exercise.training_plans):
+                    abort(403)
+            else:
+                exercise = Exercise(
+                    name=form.name.data,
+                    description=form.description.data,
+                    video_url=form.video_url.data or None,
+                    muscle_group=form.muscle_group.data or None,
+                    user_id=current_user.id,
+                )
+                db.session.add(exercise)
+                db.session.flush()
         if exercise not in training_plan.exercises:
             training_plan.exercises.append(exercise)
         db.session.commit()
-        flash('Übung hinzugefügt!', 'success')
+        flash('Trenner hinzugefügt!' if form.is_separator.data else 'Übung hinzugefügt!', 'success')
         return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
     return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan, existing_exercises=existing_exercises)
 
@@ -1549,6 +1603,8 @@ def add_exercise_to_plan(training_plan_id):
 @login_required
 def add_session(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
+    if exercise.is_separator:
+        abort(400)
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     form = ExerciseSessionForm()
@@ -1591,6 +1647,8 @@ def add_session(exercise_id):
 @login_required
 def exercise_detail(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
+    if exercise.is_separator:
+        abort(404)
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
@@ -2003,7 +2061,8 @@ def import_template_plan():
         for ex_data in parsed['exercises']:
             template_exercise = TemplateExercise(
                 name=ex_data['name'],
-                description=ex_data['description'],
+                description=ex_data['description'] if not ex_data.get('is_separator') else None,
+                is_separator=ex_data.get('is_separator', False),
                 template_plan_id=new_template.id
             )
             db.session.add(template_exercise)
@@ -2115,6 +2174,7 @@ def add_template_to_account(template_plan_id):
         exercise = Exercise(
             name=temp_ex.name,
             description=temp_ex.description,
+            is_separator=temp_ex.is_separator,
             user_id=current_user.id,
         )
         db.session.add(exercise)
@@ -2299,11 +2359,14 @@ def serialize_training_plan(plan):
 
 
 def serialize_exercise(exercise):
-    return {
+    data = {
         'id': exercise.id,
         'name': exercise.name,
         'description': exercise.description,
     }
+    if exercise.is_separator:
+        data['is_separator'] = True
+    return data
 
 
 def serialize_session(session):

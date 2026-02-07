@@ -288,6 +288,38 @@
     .ex-detail-link:hover { text-decoration: underline; }
     [data-theme="dark"] .ex-detail-link { color: #6eb5ff; }
 
+    /* ---- Separator card ---- */
+    .separator-card {
+      background: transparent !important;
+      box-shadow: none;
+      border-bottom: 2px solid #dee2e6;
+      border-radius: 0;
+      padding: 0.6rem 0.5rem 0.3rem 0.5rem;
+      margin-bottom: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .separator-label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #495057;
+    }
+    .separator-card .del-sep-btn {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.3rem;
+      border: 1px solid #dc3545;
+      background: transparent;
+      color: #dc3545;
+      cursor: pointer;
+    }
+    .separator-card .del-sep-btn:hover { background: #dc3545; color: #fff; }
+    [data-theme="dark"] .separator-card { border-color: #444; }
+    [data-theme="dark"] .separator-label { color: #ccc; }
+    [data-theme="dark"] .separator-card .del-sep-btn { border-color: #ff6b6b; color: #ff6b6b; }
+    [data-theme="dark"] .separator-card .del-sep-btn:hover { background: #dc3545; color: #fff; }
+
     /* ---- Empty state ---- */
     .empty-hint {
       text-align: center;
@@ -355,11 +387,13 @@
                   <th>Gesamtvolumen</th>
                   <th>Max. Gewicht</th>
                   <th>Beste 1RM (Epley)</th>
-                  <th>Ø Volumen ({{ exercise_overview[0].moving_window }}er Ø)</th>
+                  {% set first_real = exercise_overview|rejectattr('is_separator')|first %}
+                  <th>Ø Volumen ({{ first_real.moving_window if first_real else 5 }}er Ø)</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in exercise_overview %}
+                  {% if not item.is_separator %}
                   {% set summary = item.summary %}
                   {% set personal_bests = item.personal_bests %}
                   <tr>
@@ -409,6 +443,7 @@
                       {% endif %}
                     </td>
                   </tr>
+                  {% endif %}
                 {% endfor %}
               </tbody>
             </table>
@@ -420,65 +455,97 @@
       <p class="section-label">Übungen</p>
 
       {% for item in exercise_overview %}
-        <div class="s-card ex-card {% if item.superset_group %}superset-stripe ss-{{ item.superset_group % 5 }}{% endif %}">
-
-          {# Top row: name + reorder arrows #}
-          <div class="ex-top">
-            <div style="min-width:0">
-              <span class="ex-name">{{ item.exercise.name }}</span>
-              {% if item.superset_group %}
-                <span class="badge-ss badge-ss-{{ item.superset_group % 5 }}">Superset {{ item.superset_group }}</span>
-              {% endif %}
-              {% if item.exercise.description %}
-                <div class="ex-desc">{{ item.exercise.description }}</div>
-              {% endif %}
-            </div>
-            <div class="ex-controls">
-              {% if not loop.first %}
-                <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+        {% if item.is_separator %}
+          {# ---- Separator/divider ---- #}
+          <div class="s-card separator-card">
+            <div class="ex-top">
+              <span class="separator-label">{{ item.exercise.name }}</span>
+              <div class="ex-controls">
+                {% if not loop.first %}
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                    {{ delete_plan_form.hidden_tag() }}
+                    <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                    <input type="hidden" name="direction" value="up">
+                    <button type="submit" class="arrow-btn" title="Nach oben">&uarr;</button>
+                  </form>
+                {% endif %}
+                {% if not loop.last %}
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                    {{ delete_plan_form.hidden_tag() }}
+                    <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                    <input type="hidden" name="direction" value="down">
+                    <button type="submit" class="arrow-btn" title="Nach unten">&darr;</button>
+                  </form>
+                {% endif %}
+                <form action="{{ url_for('delete_exercise', exercise_id=item.exercise.id) }}" method="POST" style="display:inline" onsubmit="return confirm('Trenner entfernen?');">
                   {{ delete_plan_form.hidden_tag() }}
-                  <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-                  <input type="hidden" name="direction" value="up">
-                  <button type="submit" class="arrow-btn" title="Nach oben">&uarr;</button>
+                  <button type="submit" class="del-sep-btn" title="Trenner entfernen">&times;</button>
                 </form>
-              {% endif %}
-              {% if not loop.last %}
-                <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
-                  {{ delete_plan_form.hidden_tag() }}
-                  <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-                  <input type="hidden" name="direction" value="down">
-                  <button type="submit" class="arrow-btn" title="Nach unten">&darr;</button>
-                </form>
-              {% endif %}
-            </div>
-          </div>
-
-          {# Recent sessions #}
-          <div class="ex-sessions">
-            {% for session in item.recent_sessions %}
-              <div class="sess">
-                <span class="sess-date">{{ session.timestamp.strftime('%d.%m.%y') }}</span>
-                <span>{{ session.weight }}&nbsp;kg &times; {{ session.repetitions }}</span>
               </div>
-            {% else %}
-              <div class="sess-empty">Noch keine Einheiten erfasst.</div>
-            {% endfor %}
+            </div>
           </div>
+        {% else %}
+          {# ---- Regular exercise card ---- #}
+          <div class="s-card ex-card {% if item.superset_group %}superset-stripe ss-{{ item.superset_group % 5 }}{% endif %}">
 
-          {# Superset form #}
-          <form action="{{ url_for('set_superset', training_plan_id=training_plan.id) }}" method="POST" class="ss-form">
-            {{ delete_plan_form.hidden_tag() }}
-            <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
-            <input type="number" name="superset_group" placeholder="SS #" min="0" max="99" value="{{ item.superset_group or '' }}">
-            <button type="submit" class="ss-set-btn">Setzen</button>
-          </form>
+            {# Top row: name + reorder arrows #}
+            <div class="ex-top">
+              <div style="min-width:0">
+                <span class="ex-name">{{ item.exercise.name }}</span>
+                {% if item.superset_group %}
+                  <span class="badge-ss badge-ss-{{ item.superset_group % 5 }}">Superset {{ item.superset_group }}</span>
+                {% endif %}
+                {% if item.exercise.description %}
+                  <div class="ex-desc">{{ item.exercise.description }}</div>
+                {% endif %}
+              </div>
+              <div class="ex-controls">
+                {% if not loop.first %}
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                    {{ delete_plan_form.hidden_tag() }}
+                    <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                    <input type="hidden" name="direction" value="up">
+                    <button type="submit" class="arrow-btn" title="Nach oben">&uarr;</button>
+                  </form>
+                {% endif %}
+                {% if not loop.last %}
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                    {{ delete_plan_form.hidden_tag() }}
+                    <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+                    <input type="hidden" name="direction" value="down">
+                    <button type="submit" class="arrow-btn" title="Nach unten">&darr;</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
 
-          {# Detail link #}
-          <div class="ex-foot">
-            <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="ex-detail-link">Details &rarr;</a>
+            {# Recent sessions #}
+            <div class="ex-sessions">
+              {% for session in item.recent_sessions %}
+                <div class="sess">
+                  <span class="sess-date">{{ session.timestamp.strftime('%d.%m.%y') }}</span>
+                  <span>{{ session.weight }}&nbsp;kg &times; {{ session.repetitions }}</span>
+                </div>
+              {% else %}
+                <div class="sess-empty">Noch keine Einheiten erfasst.</div>
+              {% endfor %}
+            </div>
+
+            {# Superset form #}
+            <form action="{{ url_for('set_superset', training_plan_id=training_plan.id) }}" method="POST" class="ss-form">
+              {{ delete_plan_form.hidden_tag() }}
+              <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
+              <input type="number" name="superset_group" placeholder="SS #" min="0" max="99" value="{{ item.superset_group or '' }}">
+              <button type="submit" class="ss-set-btn">Setzen</button>
+            </form>
+
+            {# Detail link #}
+            <div class="ex-foot">
+              <a href="{{ url_for('exercise_detail', exercise_id=item.exercise.id) }}" class="ex-detail-link">Details &rarr;</a>
+            </div>
+
           </div>
-
-        </div>
+        {% endif %}
       {% endfor %}
 
     {% else %}

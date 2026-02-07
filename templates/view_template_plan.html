@@ -9,18 +9,26 @@
     <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">{{ template_plan.description }}</p>
     {% endif %}
 
-    <div class="section-label">Enthaltene Übungen ({{ template_plan.exercises|length }})</div>
+    <div class="section-label">Enthaltene Übungen ({{ template_plan.exercises|rejectattr('is_separator')|list|length }})</div>
     {% if template_plan.exercises %}
     <div class="s-card s-card-flush">
       <table class="table table-sm mb-0" style="font-size:0.85rem;">
         <tbody>
           {% for exercise in template_plan.exercises %}
+          {% if exercise.is_separator %}
+          <tr>
+            <td style="border-top:2px solid #6c757d; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#495057; font-size:0.8rem;">
+              {{ exercise.name }}
+            </td>
+          </tr>
+          {% else %}
           <tr>
             <td>
               <strong>{{ exercise.name }}</strong>
               {% if exercise.description %}<div class="text-muted" style="font-size:0.8rem;">{{ exercise.description }}</div>{% endif %}
             </td>
           </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>

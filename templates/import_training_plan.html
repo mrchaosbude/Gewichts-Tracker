@@ -12,11 +12,16 @@
 
 Optionale Planbeschreibung (max. 300 Zeichen)
 
+---Push
 ## Bankdrücken
 Klassische Brustübung mit der Langhantel.
 
+## Schulterdrücken
+
+---Beine
 ## Kniebeuge
 Grundübung für die Beine.</pre>
+        <div class="text-muted mt-1" style="font-size:0.72rem;"><code>---Label</code> = Trenner/Abschnitt</div>
     </div>
 
     <div class="s-card">
@@ -52,14 +57,20 @@ Grundübung für die Beine.</pre>
             {% if preview.plan_description %}
                 <p class="text-muted" style="font-size:0.85rem;">{{ preview.plan_description }}</p>
             {% endif %}
-            <div class="section-label mb-2">Übungen ({{ preview.exercises|length }})</div>
+            <div class="section-label mb-2">Übungen ({{ preview.exercises|rejectattr('is_separator')|list|length }})</div>
             {% for ex in preview.exercises %}
+            {% if ex.is_separator %}
+            <div style="padding:0.4rem 0; border-top:2px solid #6c757d; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#495057; margin-top:0.3rem;">
+                {{ ex.name }}
+            </div>
+            {% else %}
             <div style="padding:0.4rem 0; border-top:1px solid rgba(0,0,0,0.06); font-size:0.85rem;">
                 <strong>{{ ex.name }}</strong>
                 {% if ex.description %}
                     <div class="text-muted" style="white-space:pre-line; font-size:0.8rem;">{{ ex.description }}</div>
                 {% endif %}
             </div>
+            {% endif %}
             {% endfor %}
         </div>
     {% endif %}

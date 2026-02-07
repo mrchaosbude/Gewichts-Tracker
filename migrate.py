@@ -120,6 +120,8 @@ def run_migration(database_uri: str | None, dry_run: bool) -> None:
         altered |= add_column_if_missing("exercise", "muscle_group", "VARCHAR(50)")
         altered |= add_column_if_missing("training_plan", "share_token", "VARCHAR(36)")
         altered |= add_column_if_missing("plan_exercises", "position", "INTEGER")
+        altered |= add_column_if_missing("exercise", "is_separator", "BOOLEAN DEFAULT 0")
+        altered |= add_column_if_missing("template_exercise", "is_separator", "BOOLEAN DEFAULT 0")
 
         # Backfill ownership information so that historical data stays accessible.
         exercise_updates = backfill_exercise_owners()

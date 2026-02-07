@@ -130,9 +130,16 @@
         <div class="print-date">Erstellt am: {{ print_date.strftime('%d.%m.%Y %H:%M') }}</div>
     </div>
 
+    {% set exercise_counter = namespace(val=0) %}
     {% for item in exercise_overview %}
+    {% if item.is_separator %}
+    <div class="exercise" style="margin-bottom: 15px;">
+        <h2 style="border-left-color: #999; background: #e8e8e8; font-size: 13pt; text-transform: uppercase; letter-spacing: 0.5px;">{{ item.exercise.name }}</h2>
+    </div>
+    {% else %}
+    {% set exercise_counter.val = exercise_counter.val + 1 %}
     <div class="exercise">
-        <h2>{{ loop.index }}. {{ item.exercise.name }}</h2>
+        <h2>{{ exercise_counter.val }}. {{ item.exercise.name }}</h2>
         {% if item.exercise.description %}
             <div class="description">{{ item.exercise.description }}</div>
         {% endif %}
@@ -207,6 +214,7 @@
         </table>
         {% endif %}
     </div>
+    {% endif %}
     {% endfor %}
 
     <div class="footer">
