@@ -6,9 +6,11 @@
   <div class="page-wrap" style="max-width:720px;">
     <h2 class="page-title">Admin</h2>
 
-    <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-      <a href="{{ url_for('admin_footer_pages') }}" class="btn btn-outline-primary btn-block btn-sm">Footer-Seiten</a>
-      <a href="{{ url_for('admin_footer_links') }}" class="btn btn-outline-primary btn-block btn-sm">Footer-Links</a>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+      <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-secondary btn-sm">Einstellungen</a>
+      <a href="{{ url_for('admin_footer_pages') }}" class="btn btn-outline-primary btn-sm">Footer-Seiten</a>
+      <a href="{{ url_for('admin_footer_links') }}" class="btn btn-outline-primary btn-sm">Footer-Links</a>
+      <a href="{{ url_for('admin_broadcast_email') }}" class="btn btn-outline-primary btn-sm">E-Mail senden</a>
     </div>
 
     <div class="section-label">Benutzer ({{ users|length }})</div>

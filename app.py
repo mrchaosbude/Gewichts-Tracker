@@ -28,6 +28,10 @@ import csv
 import zipfile
 import os
 import uuid
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import calendar as cal_module
 
 app = Flask(__name__)
@@ -71,6 +75,10 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(150), nullable=True)
+    email_confirmed = db.Column(db.Boolean, default=False)
+    email_token = db.Column(db.String(100), nullable=True)
+    email_token_created = db.Column(db.DateTime, nullable=True)
     registration_date = db.Column(db.DateTime, default=datetime.datetime.now)
     last_login = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
@@ -160,6 +168,119 @@ class BodyWeight(db.Model):
     notes = db.Column(db.Text)  # Optionale Notizen
 
 
+class AppSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    app_name = db.Column(db.String(150), default='Gewichts-Tracker')
+    chart_weight = db.Column(db.Boolean, default=True)
+    chart_reps = db.Column(db.Boolean, default=True)
+    chart_volume = db.Column(db.Boolean, default=True)
+    chart_volume_avg = db.Column(db.Boolean, default=True)
+    chart_1rm = db.Column(db.Boolean, default=True)
+    chart_1rm_avg = db.Column(db.Boolean, default=True)
+    require_email_verification = db.Column(db.Boolean, default=False)
+    smtp_server = db.Column(db.String(150), nullable=True)
+    smtp_port = db.Column(db.Integer, default=587)
+    smtp_username = db.Column(db.String(150), nullable=True)
+    smtp_password = db.Column(db.String(150), nullable=True)
+    smtp_use_tls = db.Column(db.Boolean, default=True)
+    smtp_sender_email = db.Column(db.String(150), nullable=True)
+
+
+def get_app_settings():
+    settings = AppSettings.query.first()
+    if not settings:
+        settings = AppSettings(id=1)
+        db.session.add(settings)
+        db.session.commit()
+    return settings
+
+
+def send_verification_email(user):
+    """Send an email verification link to the user using SMTP settings from AppSettings."""
+    settings = get_app_settings()
+    if not settings.smtp_server or not settings.smtp_sender_email:
+        return False
+
+    confirm_url = url_for('confirm_email', token=user.email_token, _external=True)
+    app_name = settings.app_name or 'Gewichts-Tracker'
+
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #007bff;">{app_name}</h2>
+        <p>Hallo <strong>{user.username}</strong>,</p>
+        <p>bitte bestätige deine E-Mail-Adresse, indem du auf den folgenden Link klickst:</p>
+        <p style="text-align: center; margin: 30px 0;">
+            <a href="{confirm_url}"
+               style="background: #007bff; color: #fff; padding: 12px 28px; border-radius: 6px;
+                      text-decoration: none; font-weight: bold;">
+                E-Mail bestätigen
+            </a>
+        </p>
+        <p style="font-size: 0.85rem; color: #666;">
+            Oder kopiere diesen Link in deinen Browser:<br>
+            <a href="{confirm_url}">{confirm_url}</a>
+        </p>
+        <p style="font-size: 0.85rem; color: #999; margin-top: 30px;">
+            Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.
+            Der Account wird nach 7 Tagen automatisch gelöscht.
+        </p>
+    </div>
+    """
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f'{app_name} – E-Mail bestätigen'
+    msg['From'] = settings.smtp_sender_email
+    msg['To'] = user.email
+    msg.attach(MIMEText(html_body, 'html'))
+
+    try:
+        if settings.smtp_use_tls:
+            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
+        if settings.smtp_username and settings.smtp_password:
+            server.login(settings.smtp_username, settings.smtp_password)
+        server.sendmail(settings.smtp_sender_email, user.email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        app.logger.error('Failed to send verification email: %s', e)
+        return False
+
+
+_last_cleanup = None
+
+def cleanup_unverified_accounts():
+    """Delete unverified accounts older than 7 days. Runs at most once per hour."""
+    global _last_cleanup
+    now = datetime.datetime.now()
+    if _last_cleanup and (now - _last_cleanup).total_seconds() < 3600:
+        return
+    _last_cleanup = now
+
+    settings = get_app_settings()
+    if not settings.require_email_verification:
+        return
+
+    cutoff = now - datetime.timedelta(days=7)
+    expired_users = User.query.filter(
+        User.email_confirmed == False,
+        User.is_admin == False,
+        User.registration_date < cutoff,
+    ).all()
+    for u in expired_users:
+        app.logger.info('Deleting unverified account: %s (registered %s)', u.username, u.registration_date)
+        db.session.delete(u)
+    if expired_users:
+        db.session.commit()
+
+
+@app.before_request
+def before_request_cleanup():
+    cleanup_unverified_accounts()
+
+
 # Geplante Trainingstage
 class PlannedTraining(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -193,12 +314,14 @@ def allowed_file(filename):
 
 @app.context_processor
 def inject_footer_pages():
-    """Provide footer pages to all templates."""
+    """Provide footer pages and app name to all templates."""
 
     _ensure_database_setup_once()
+    settings = get_app_settings()
     return {
         "footer_pages": FooterPage.query.all(),
         "footer_links": FooterLink.query.all(),
+        "app_name": settings.app_name or 'Gewichts-Tracker',
     }
 
 
@@ -237,15 +360,21 @@ def exercise_owned_exclusively_by(user_id, exercise):
 # ----------------------------------------------------
 class RegistrationForm(FlaskForm):
     username = StringField('Benutzername', validators=[DataRequired(), Length(min=4, max=25)])
+    email = StringField('E-Mail', validators=[Optional(), Length(max=150)])
     password = PasswordField('Passwort', validators=[DataRequired(), Length(min=6)])
     confirm = PasswordField('Passwort wiederholen', validators=[DataRequired(), EqualTo('password', message='Passwörter müssen übereinstimmen')])
     if app.config.get('RECAPTCHA_ENABLED', True):
         recaptcha = RecaptchaField()
     submit = SubmitField('Registrieren')
-    
+
     def validate_username(self, username):
         if User.query.filter_by(username=username.data).first():
             raise ValidationError('Benutzername bereits vergeben.')
+
+    def validate_email(self, email):
+        if email.data:
+            if User.query.filter_by(email=email.data).first():
+                raise ValidationError('Diese E-Mail-Adresse wird bereits verwendet.')
 
 class LoginForm(FlaskForm):
     username = StringField('Benutzername', validators=[DataRequired()])
@@ -357,6 +486,24 @@ class DeleteFooterLinkForm(FlaskForm):
     submit = SubmitField('Löschen')
 
 
+class AppSettingsForm(FlaskForm):
+    app_name = StringField('App-Titel', validators=[DataRequired(), Length(max=150)])
+    chart_weight = BooleanField('Gewichtsverlauf')
+    chart_reps = BooleanField('Wiederholungen')
+    chart_volume = BooleanField('Volumen')
+    chart_volume_avg = BooleanField('Volumen Ø (Durchschnitt)')
+    chart_1rm = BooleanField('1RM (Epley)')
+    chart_1rm_avg = BooleanField('1RM Ø (Durchschnitt)')
+    require_email_verification = BooleanField('E-Mail-Verifizierung aktivieren')
+    smtp_server = StringField('SMTP-Server', validators=[Optional(), Length(max=150)])
+    smtp_port = IntegerField('SMTP-Port', validators=[Optional(), NumberRange(min=1, max=65535)], default=587)
+    smtp_username = StringField('SMTP-Benutzername', validators=[Optional(), Length(max=150)])
+    smtp_password = PasswordField('SMTP-Passwort', validators=[Optional(), Length(max=150)])
+    smtp_use_tls = BooleanField('TLS verwenden')
+    smtp_sender_email = StringField('Absender-E-Mail', validators=[Optional(), Length(max=150)])
+    submit = SubmitField('Speichern')
+
+
 class BodyWeightForm(FlaskForm):
     weight = IntegerField('Gewicht (kg)', validators=[InputRequired(), NumberRange(min=20, max=500)], render_kw={"step": "0.1", "onfocus": "this.select()"})
     notes = TextAreaField('Notizen (optional)', render_kw={"rows": 2})
@@ -365,6 +512,12 @@ class BodyWeightForm(FlaskForm):
 
 class DeleteBodyWeightForm(FlaskForm):
     submit = SubmitField('Löschen')
+
+
+class BroadcastEmailForm(FlaskForm):
+    subject = StringField('Betreff', validators=[DataRequired(), Length(max=200)])
+    message = TextAreaField('Nachricht (HTML erlaubt)', validators=[DataRequired()])
+    submit = SubmitField('An alle senden')
 
 
 class MarkdownImportForm(FlaskForm):
@@ -744,13 +897,19 @@ def service_worker():
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 
-@app.route('/fit')
+@app.route('/')
 def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     return render_template('index.html')
 
 @app.route('/register', methods=['GET','POST'])
 def register():
+    settings = get_app_settings()
+    email_required = settings.require_email_verification
     form = RegistrationForm()
+    if email_required:
+        form.email.validators = [DataRequired(), Length(max=150)]
     if form.validate_on_submit():
         is_first_user = User.query.first() is None
         hashed_password = generate_password_hash(form.password.data, method='pbkdf2:sha256')
@@ -759,27 +918,49 @@ def register():
             password=hashed_password,
             is_admin=is_first_user
         )
-        db.session.add(new_user)
-        db.session.commit()
-        flash('Konto erstellt, bitte einloggen.', 'success')
-        return redirect(url_for('login'))
-    return render_template('register.html', form=form)
+        if email_required and not is_first_user:
+            new_user.email = form.email.data
+            new_user.email_confirmed = False
+            new_user.email_token = secrets.token_urlsafe(32)
+            new_user.email_token_created = datetime.datetime.now()
+            db.session.add(new_user)
+            db.session.commit()
+            if send_verification_email(new_user):
+                flash('Konto erstellt! Bitte bestätige deine E-Mail-Adresse über den Link in der E-Mail.', 'info')
+            else:
+                flash('Konto erstellt, aber die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte kontaktiere den Administrator.', 'warning')
+            return redirect(url_for('login'))
+        else:
+            new_user.email_confirmed = True
+            if email_required and form.email.data:
+                new_user.email = form.email.data
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Konto erstellt, bitte einloggen.', 'success')
+            return redirect(url_for('login'))
+    return render_template('register.html', form=form, email_required=email_required)
 
 @app.route('/login', methods=['GET','POST'])
 def login():
     form = LoginForm()
+    show_resend = False
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user and check_password_hash(user.password, form.password.data):
-            login_user(user, remember=form.remember.data)
-            user.last_login = datetime.datetime.now()
-            db.session.commit()
-            flash('Erfolgreich eingeloggt!', 'success')
-            return redirect(url_for('dashboard'))
+            settings = get_app_settings()
+            if settings.require_email_verification and not user.email_confirmed:
+                flash('Bitte bestätige zuerst deine E-Mail-Adresse.', 'warning')
+                show_resend = True
+            else:
+                login_user(user, remember=form.remember.data)
+                user.last_login = datetime.datetime.now()
+                db.session.commit()
+                flash('Erfolgreich eingeloggt!', 'success')
+                return redirect(url_for('dashboard'))
         else:
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
     pages = FooterPage.query.all()
-    return render_template('login.html', form=form, footer_pages=pages)
+    return render_template('login.html', form=form, footer_pages=pages, show_resend=show_resend)
 
 
 @app.route('/logout')
@@ -788,6 +969,42 @@ def logout():
     logout_user()
     flash('Ausgeloggt.', 'info')
     return redirect(url_for('login'))
+
+
+@app.route('/confirm/<token>')
+def confirm_email(token):
+    user = User.query.filter_by(email_token=token).first()
+    if not user:
+        flash('Ungültiger oder abgelaufener Bestätigungslink.', 'danger')
+        return redirect(url_for('login'))
+    user.email_confirmed = True
+    user.email_token = None
+    user.email_token_created = None
+    db.session.commit()
+    flash('E-Mail bestätigt! Du kannst dich jetzt einloggen.', 'success')
+    return redirect(url_for('login'))
+
+
+@app.route('/resend-confirmation', methods=['POST'])
+def resend_confirmation():
+    username = request.form.get('username', '').strip()
+    user = User.query.filter_by(username=username).first()
+    if not user or user.email_confirmed or not user.email:
+        flash('Bestätigungslink konnte nicht erneut gesendet werden.', 'danger')
+        return redirect(url_for('login'))
+    now = datetime.datetime.now()
+    if user.email_token_created and (now - user.email_token_created).total_seconds() < 300:
+        flash('Bitte warte einige Minuten, bevor du erneut eine E-Mail anforderst.', 'info')
+        return redirect(url_for('login'))
+    user.email_token = secrets.token_urlsafe(32)
+    user.email_token_created = now
+    db.session.commit()
+    if send_verification_email(user):
+        flash('Bestätigungs-E-Mail erneut gesendet!', 'success')
+    else:
+        flash('E-Mail konnte nicht gesendet werden. Bitte kontaktiere den Administrator.', 'warning')
+    return redirect(url_for('login'))
+
 
 @app.route('/dashboard')
 @login_required
@@ -1675,6 +1892,15 @@ def exercise_detail(exercise_id):
     all_sessions_serialized = [serialize_session(s) for s in all_sessions]
     delete_exercise_form = DeleteExerciseForm()
     delete_session_form = DeleteSessionForm()
+    app_settings = get_app_settings()
+    chart_settings = {
+        'weight': app_settings.chart_weight,
+        'reps': app_settings.chart_reps,
+        'volume': app_settings.chart_volume,
+        'volume_avg': app_settings.chart_volume_avg,
+        'one_rm': app_settings.chart_1rm,
+        'one_rm_avg': app_settings.chart_1rm_avg,
+    }
     return render_template(
         'exercise_detail.html',
         exercise=exercise,
@@ -1689,6 +1915,7 @@ def exercise_detail(exercise_id):
         personal_bests=stats['personal_bests'],
         moving_window=stats['moving_window'],
         progression=progression,
+        chart_settings=chart_settings,
     )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
@@ -1820,6 +2047,124 @@ def admin_overview():
         set_trainer_form=set_trainer_form,
         remove_trainer_form=remove_trainer_form,
     )
+
+@app.route('/admin/settings', methods=['GET','POST'])
+@login_required
+@admin_required
+def admin_settings():
+    settings = get_app_settings()
+    form = AppSettingsForm(obj=settings)
+    if form.validate_on_submit():
+        settings.app_name = form.app_name.data
+        settings.chart_weight = form.chart_weight.data
+        settings.chart_reps = form.chart_reps.data
+        settings.chart_volume = form.chart_volume.data
+        settings.chart_volume_avg = form.chart_volume_avg.data
+        settings.chart_1rm = form.chart_1rm.data
+        settings.chart_1rm_avg = form.chart_1rm_avg.data
+        settings.require_email_verification = form.require_email_verification.data
+        settings.smtp_server = form.smtp_server.data
+        settings.smtp_port = form.smtp_port.data or 587
+        settings.smtp_username = form.smtp_username.data
+        if form.smtp_password.data:
+            settings.smtp_password = form.smtp_password.data
+        settings.smtp_use_tls = form.smtp_use_tls.data
+        settings.smtp_sender_email = form.smtp_sender_email.data
+        db.session.commit()
+        flash('Einstellungen gespeichert!', 'success')
+        return redirect(url_for('admin_settings'))
+    return render_template('admin_settings.html', form=form, settings=settings)
+
+
+@app.route('/admin/test-email', methods=['POST'])
+@login_required
+@admin_required
+def admin_test_email():
+    settings = get_app_settings()
+    if not settings.smtp_server or not settings.smtp_sender_email:
+        flash('Bitte zuerst SMTP-Einstellungen konfigurieren.', 'danger')
+        return redirect(url_for('admin_settings'))
+    app_name = settings.app_name or 'Gewichts-Tracker'
+    test_to = settings.smtp_sender_email
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f'{app_name} – Test-E-Mail'
+    msg['From'] = settings.smtp_sender_email
+    msg['To'] = test_to
+    html = f'<p>Dies ist eine Test-E-Mail von <strong>{app_name}</strong>. Die SMTP-Konfiguration funktioniert!</p>'
+    msg.attach(MIMEText(html, 'html'))
+    try:
+        if settings.smtp_use_tls:
+            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
+        if settings.smtp_username and settings.smtp_password:
+            server.login(settings.smtp_username, settings.smtp_password)
+        server.sendmail(settings.smtp_sender_email, test_to, msg.as_string())
+        server.quit()
+        flash(f'Test-E-Mail an {test_to} gesendet!', 'success')
+    except Exception as e:
+        flash(f'Fehler beim Senden: {e}', 'danger')
+    return redirect(url_for('admin_settings'))
+
+
+@app.route('/admin/broadcast-email', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_broadcast_email():
+    settings = get_app_settings()
+    smtp_configured = bool(settings.smtp_server and settings.smtp_sender_email)
+    form = BroadcastEmailForm()
+    if form.validate_on_submit():
+        if not smtp_configured:
+            flash('Bitte zuerst SMTP-Einstellungen in den Einstellungen konfigurieren.', 'danger')
+            return redirect(url_for('admin_settings'))
+        recipients = User.query.filter(User.email.isnot(None), User.email != '', User.email_confirmed == True).all()
+        if not recipients:
+            flash('Keine Benutzer mit bestätigter E-Mail-Adresse gefunden.', 'warning')
+            return redirect(url_for('admin_broadcast_email'))
+        app_name = settings.app_name or 'Gewichts-Tracker'
+        sent = 0
+        errors = 0
+        try:
+            if settings.smtp_use_tls:
+                server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
+                server.starttls()
+            else:
+                server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
+            if settings.smtp_username and settings.smtp_password:
+                server.login(settings.smtp_username, settings.smtp_password)
+            for user in recipients:
+                try:
+                    msg = MIMEMultipart('alternative')
+                    msg['Subject'] = form.subject.data
+                    msg['From'] = settings.smtp_sender_email
+                    msg['To'] = user.email
+                    html_body = f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #007bff;">{app_name}</h2>
+                        <p>Hallo <strong>{user.username}</strong>,</p>
+                        <div>{form.message.data}</div>
+                        <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;">
+                        <p style="font-size: 0.8rem; color: #999;">{app_name}</p>
+                    </div>
+                    """
+                    msg.attach(MIMEText(html_body, 'html'))
+                    server.sendmail(settings.smtp_sender_email, user.email, msg.as_string())
+                    sent += 1
+                except Exception:
+                    errors += 1
+            server.quit()
+        except Exception as e:
+            flash(f'SMTP-Verbindungsfehler: {e}', 'danger')
+            return redirect(url_for('admin_broadcast_email'))
+        if errors:
+            flash(f'E-Mail an {sent} Benutzer gesendet, {errors} fehlgeschlagen.', 'warning')
+        else:
+            flash(f'E-Mail erfolgreich an {sent} Benutzer gesendet!', 'success')
+        return redirect(url_for('admin_overview'))
+    return render_template('admin_broadcast_email.html', form=form, smtp_configured=smtp_configured)
+
 
 @app.route('/admin/user/<int:user_id>/change_password', methods=['GET','POST'])
 @login_required

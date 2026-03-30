@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Einstellungen{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .setting-group {
+      margin-bottom: 1.25rem;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.88rem;
+    }
+    .setting-item:last-child { border-bottom: none; }
+    .setting-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      cursor: pointer;
+    }
+    .setting-item label {
+      margin: 0;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .color-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .setting-item { border-color: #2a2a4a; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Einstellungen</h2>
+
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+
+        <p class="section-label" style="margin-top:0">Allgemein</p>
+        <div class="form-group" style="margin-bottom:1.25rem;">
+          {{ form.app_name.label(class="small font-weight-bold") }}
+          {{ form.app_name(class="form-control", placeholder="z.B. Gewichts-Tracker, Mein Gym...") }}
+        </div>
+
+        <p class="section-label">Sichtbare Graphen (Übungsdetails)</p>
+
+        <div class="setting-group">
+          <div class="setting-item">
+            {{ form.chart_weight(id="chart_weight") }}
+            <label for="chart_weight">Gewichtsverlauf</label>
+            <span class="color-dot" style="background: rgba(75, 192, 192, 1);"></span>
+          </div>
+          <div class="setting-item">
+            {{ form.chart_reps(id="chart_reps") }}
+            <label for="chart_reps">Wiederholungen</label>
+            <span class="color-dot" style="background: rgba(153, 102, 255, 1);"></span>
+          </div>
+          <div class="setting-item">
+            {{ form.chart_volume(id="chart_volume") }}
+            <label for="chart_volume">Volumen</label>
+            <span class="color-dot" style="background: rgba(255, 99, 132, 1);"></span>
+          </div>
+          <div class="setting-item">
+            {{ form.chart_volume_avg(id="chart_volume_avg") }}
+            <label for="chart_volume_avg">Volumen Ø (Durchschnitt)</label>
+            <span class="color-dot" style="background: rgba(194, 24, 91, 1);"></span>
+          </div>
+          <div class="setting-item">
+            {{ form.chart_1rm(id="chart_1rm") }}
+            <label for="chart_1rm">1RM (Epley)</label>
+            <span class="color-dot" style="background: rgba(255, 159, 64, 1);"></span>
+          </div>
+          <div class="setting-item">
+            {{ form.chart_1rm_avg(id="chart_1rm_avg") }}
+            <label for="chart_1rm_avg">1RM Ø (Durchschnitt)</label>
+            <span class="color-dot" style="background: rgba(255, 205, 86, 1);"></span>
+          </div>
+        </div>
+
+        <p class="section-label">E-Mail-Verifizierung</p>
+
+        <div class="setting-group">
+          <div class="setting-item">
+            {{ form.require_email_verification(id="require_email_verification") }}
+            <label for="require_email_verification">E-Mail-Bestätigung bei Registrierung</label>
+          </div>
+        </div>
+
+        <div id="smtp-settings" style="display:none;">
+          <p class="section-label">SMTP-Einstellungen</p>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            {{ form.smtp_server.label(class="small font-weight-bold") }}
+            {{ form.smtp_server(class="form-control", placeholder="z.B. smtp.gmail.com") }}
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            {{ form.smtp_port.label(class="small font-weight-bold") }}
+            {{ form.smtp_port(class="form-control", placeholder="587") }}
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            {{ form.smtp_username.label(class="small font-weight-bold") }}
+            {{ form.smtp_username(class="form-control", placeholder="SMTP-Benutzer") }}
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            {{ form.smtp_password.label(class="small font-weight-bold") }}
+            {{ form.smtp_password(class="form-control", placeholder="(gespeichert)" if settings.smtp_password else "SMTP-Passwort") }}
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            {{ form.smtp_sender_email.label(class="small font-weight-bold") }}
+            {{ form.smtp_sender_email(class="form-control", placeholder="noreply@example.com") }}
+          </div>
+          <div class="setting-group">
+            <div class="setting-item">
+              {{ form.smtp_use_tls(id="smtp_use_tls") }}
+              <label for="smtp_use_tls">TLS verwenden (empfohlen)</label>
+            </div>
+          </div>
+        </div>
+
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </form>
+
+      <div id="test-email-section" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid #eee;">
+        <form method="POST" action="{{ url_for('admin_test_email') }}">
+          <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
+          <button type="submit" class="btn btn-outline-secondary btn-block btn-sm">Test-E-Mail senden</button>
+        </form>
+      </div>
+    </div>
+
+    <a href="{{ url_for('admin_overview') }}" class="back-link">&larr; Zurück zur Admin-Übersicht</a>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  var cb = document.getElementById('require_email_verification');
+  var smtp = document.getElementById('smtp-settings');
+  var testSection = document.getElementById('test-email-section');
+  function toggle() {
+    var show = cb.checked;
+    smtp.style.display = show ? '' : 'none';
+    testSection.style.display = show ? '' : 'none';
+  }
+  cb.addEventListener('change', toggle);
+  toggle();
+})();
+</script>
+{% endblock %}
+

@@ -43,6 +43,15 @@
         </div>
         {{ form.submit(class="btn btn-primary btn-block") }}
       </form>
+      {% if show_resend %}
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+        <form method="POST" action="{{ url_for('resend_confirmation') }}">
+          <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
+          <input type="hidden" name="username" value="{{ form.username.data or '' }}">
+          <button type="submit" class="btn btn-outline-primary btn-block btn-sm">Bestätigungs-E-Mail erneut senden</button>
+        </form>
+      </div>
+      {% endif %}
     </div>
     <p class="text-center mt-3" style="font-size:0.9rem;">Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
   </div>

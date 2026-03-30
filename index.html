@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='styles/kase.css') }}">
+    <title>Käse-Mischung Berechnung</title>
+    <script>
+        // JavaScript-Funktion zur dynamischen Erstellung von Eingabefeldern für Käsesorten
+        function createInputFields() {
+            const numSorten = document.getElementById("num_sorten").value;
+            const container = document.getElementById("kaese_inputs");
+            container.innerHTML = "";  // Reset the container
+            
+            for (let i = 1; i <= numSorten; i++) {
+                const blockWeightInput = `<div>
+                    <label for="block_weight_${i}">Blockgewicht Käsesorte ${i} (kg):</label>
+                    <input type="text" name="block_weight_${i}" required>
+                </div>`;
+                const pizzaWeightInput = `<div>
+                    <label for="pizza_weight_${i}">Käse pro Pizza Käsesorte ${i} (g):</label>
+                    <input type="text" name="pizza_weight_${i}" required>
+                </div>`;
+                
+                container.innerHTML += blockWeightInput + pizzaWeightInput;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Käse-Mischung Berechnung</h1>
+    <form action="/calculate" method="post">
+        <h2>Wie viele Käsesorten?</h2>
+        <input type="number" id="num_sorten" name="num_sorten" min="2" value="2" required>
+        <button type="button" onclick="createInputFields()">Eingabefelder erstellen</button>
+
+        <div id="kaese_inputs">
+            <!-- Die dynamisch erstellten Eingabefelder werden hier erscheinen -->
+        </div>
+
+        <button type="submit">Berechnen</button>
+    </form>
+</body>
+</html>

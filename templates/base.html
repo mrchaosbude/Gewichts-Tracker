@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{% block title %}Gewichts-Tracker{% endblock %}</title>
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <!-- PWA / Add to Home Screen -->
     <link rel="manifest" href="/static/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -283,7 +283,7 @@
               <a href="{{ link.url }}" class="text-muted small mx-2 my-1">{{ link.title }}</a>
             {% endfor %}
           {% else %}
-            <span class="text-muted small">&copy; {{ config.get('APP_NAME', 'Gewichts-Tracker') }}</span>
+            <span class="text-muted small">&copy; {{ app_name }}</span>
           {% endif %}
           <span class="dark-mode-toggle text-muted small mx-2 my-1" id="darkModeToggle" title="Dark Mode umschalten">🌙</span>
         </nav>

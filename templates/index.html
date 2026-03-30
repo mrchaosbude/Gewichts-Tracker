@@ -1,21 +1,368 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>{{ app_name }}</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#007bff">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-{% block title %}Fitness App{% endblock %}
+    :root {
+      --bg: #ffffff;
+      --bg2: #f8f9fa;
+      --text: #212529;
+      --text2: #6c757d;
+      --card-bg: #ffffff;
+      --card-border: #e9ecef;
+      --hero-from: #007bff;
+      --hero-to: #6610f2;
+      --accent: #007bff;
+      --placeholder-bg: #dee2e6;
+      --placeholder-text: #adb5bd;
+      --reason-icon: #e8f4fd;
+    }
+    [data-theme="dark"] {
+      --bg: #0a1929;
+      --bg2: #0f2744;
+      --text: #eaeaea;
+      --text2: #a0a0a0;
+      --card-bg: #16213e;
+      --card-border: #1a3a5c;
+      --hero-from: #1a3a5c;
+      --hero-to: #4a148c;
+      --accent: #6eb5ff;
+      --placeholder-bg: #1a3a5c;
+      --placeholder-text: #4a6a8a;
+      --reason-icon: #0f3460;
+    }
 
-{% block extra_head %}{% endblock %}
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
 
-{% block content %}
-  <div class="page-wrap" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; text-align:center;">
-    <div style="font-size:3rem; margin-bottom:0.5rem;">&#127947;</div>
-    <h1 style="font-size:1.6rem; font-weight:700; margin-bottom:0.3rem;">Fitness Tracker</h1>
-    <p class="text-muted" style="font-size:0.9rem; margin-bottom:1.5rem;">Tracke dein Training. Erreiche deine Ziele.</p>
-    <div style="display:flex; gap:0.75rem; width:100%; max-width:300px;">
-      <a href="{{ url_for('login') }}" class="btn btn-primary btn-block">Login</a>
-      <a href="{{ url_for('register') }}" class="btn btn-outline-secondary btn-block">Registrieren</a>
+    /* ---- Navbar ---- */
+    .lp-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1.5rem;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--card-border);
+    }
+    [data-theme="dark"] .lp-nav { background: rgba(10,25,41,0.92); }
+    .lp-nav .logo { font-weight: 800; font-size: 1.1rem; }
+    .lp-nav-links { display: flex; gap: 0.5rem; }
+    .lp-btn {
+      display: inline-block; padding: 0.45rem 1.1rem; border-radius: 0.5rem;
+      font-size: 0.85rem; font-weight: 600; text-decoration: none; transition: all 0.2s;
+    }
+    .lp-btn-primary { background: var(--accent); color: #fff !important; }
+    .lp-btn-primary:hover { filter: brightness(1.1); }
+    .lp-btn-outline { background: transparent; border: 1.5px solid var(--accent); color: var(--accent) !important; }
+    .lp-btn-outline:hover { background: var(--accent); color: #fff !important; }
+    .lp-btn-white { background: #fff; color: #007bff !important; }
+    .lp-btn-white:hover { background: #f0f0f0; }
+    .lp-btn-lg { padding: 0.7rem 1.8rem; font-size: 1rem; border-radius: 0.6rem; }
+
+    /* ---- Hero ---- */
+    .hero {
+      background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+      color: #fff;
+      text-align: center;
+      padding: 7rem 1.5rem 4rem;
+    }
+    .hero h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 0.5rem; line-height: 1.2; }
+    .hero p { font-size: 1.1rem; opacity: 0.9; max-width: 520px; margin: 0 auto 2rem; }
+    .hero-btns { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+    /* ---- Section ---- */
+    .lp-section {
+      padding: 4rem 1.5rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .lp-section-alt { background: var(--bg2); }
+    .lp-section-alt .lp-section { padding-top: 4rem; padding-bottom: 4rem; }
+    .section-title {
+      text-align: center; font-size: 1.6rem; font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .section-sub {
+      text-align: center; font-size: 0.95rem; color: var(--text2);
+      margin-bottom: 2.5rem; max-width: 560px; margin-left: auto; margin-right: auto;
+    }
+
+    /* ---- Feature grid ---- */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      text-align: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .feature-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .feature-icon {
+      font-size: 2rem; margin-bottom: 0.5rem;
+      width: 56px; height: 56px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--reason-icon);
+    }
+    .feature-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .feature-card p { font-size: 0.82rem; color: var(--text2); margin: 0; }
+
+    /* ---- Screenshots ---- */
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+    .screenshot-placeholder {
+      background: var(--placeholder-bg);
+      border-radius: 0.75rem;
+      aspect-ratio: 9/16;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--placeholder-text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 2px dashed var(--placeholder-text);
+    }
+
+    /* ---- Reasons ---- */
+    .reason-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    .reason-card {
+      display: flex; gap: 1rem; align-items: flex-start;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .reason-icon-wrap {
+      flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+      background: var(--reason-icon);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+    }
+    .reason-card h3 { font-size: 0.92rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .reason-card p { font-size: 0.82rem; color: var(--text2); margin: 0; }
+
+    /* ---- CTA Footer ---- */
+    .cta-footer {
+      background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+      color: #fff;
+      text-align: center;
+      padding: 3.5rem 1.5rem;
+    }
+    .cta-footer h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .cta-footer p { opacity: 0.9; margin-bottom: 1.5rem; }
+    .cta-footer-bottom {
+      margin-top: 2rem; padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      font-size: 0.8rem; opacity: 0.7;
+    }
+
+    /* ---- Dark mode toggle ---- */
+    .dm-toggle {
+      cursor: pointer; font-size: 1.1rem;
+      background: none; border: none; padding: 0.3rem;
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 640px) {
+      .hero { padding: 6rem 1rem 3rem; }
+      .hero h1 { font-size: 1.8rem; }
+      .hero p { font-size: 0.95rem; }
+      .lp-section { padding: 2.5rem 1rem; }
+      .section-title { font-size: 1.3rem; }
+      .reason-list { grid-template-columns: 1fr; }
+      .screenshot-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 768px) {
+      .hero h1 { font-size: 2.8rem; }
+      .feature-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .hero h1 { font-size: 3.2rem; }
+      .feature-grid { grid-template-columns: repeat(4, 1fr); }
+      .screenshot-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="lp-nav">
+    <span class="logo">{{ app_name }}</span>
+    <div class="lp-nav-links">
+      <a href="{{ url_for('login') }}" class="lp-btn lp-btn-outline">Login</a>
+      <a href="{{ url_for('register') }}" class="lp-btn lp-btn-primary">Registrieren</a>
     </div>
-  </div>
-{% endblock %}
+  </nav>
 
-{% block extra_scripts %}
-  <script src="/static/js/main.js"></script>
-{% endblock %}
+  <!-- Hero -->
+  <section class="hero">
+    <h1>{{ app_name }}</h1>
+    <p>Dein persoenlicher Trainingsbegleiter. Plane Workouts, tracke Fortschritte und erreiche deine Ziele &mdash; direkt im Browser, auch offline.</p>
+    <div class="hero-btns">
+      <a href="{{ url_for('register') }}" class="lp-btn lp-btn-white lp-btn-lg">Kostenlos starten</a>
+      <a href="#features" class="lp-btn lp-btn-lg" style="border:1.5px solid rgba(255,255,255,0.5); color:#fff !important;">Features entdecken</a>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="lp-section" id="features">
+    <h2 class="section-title">Alles was du brauchst</h2>
+    <p class="section-sub">Von der Trainingsplanung bis zur Auswertung &mdash; alles in einer App.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#128203;</div>
+        <h3>Trainingsplaene</h3>
+        <p>Erstelle und verwalte beliebig viele Trainingsplaene mit eigenen Uebungen.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128200;</div>
+        <h3>Fortschrittsgraphen</h3>
+        <p>Verfolge Gewicht, Volumen und geschaetzte 1RM ueber die Zeit in interaktiven Charts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#127942;</div>
+        <h3>Persoenliche Rekorde</h3>
+        <p>Automatische Erkennung neuer PRs bei Gewicht, Volumen und One-Rep-Max.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128241;</div>
+        <h3>App-Modus (PWA)</h3>
+        <p>Installiere die App auf dem Homescreen &mdash; funktioniert auch offline.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128197;</div>
+        <h3>Trainingskalender</h3>
+        <p>Plane Trainingstage im Kalender und behalte den Ueberblick ueber deine Frequenz.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128202;</div>
+        <h3>Statistiken</h3>
+        <p>Detaillierte Auswertungen pro Uebung mit gleitendem Durchschnitt und Trends.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128247;</div>
+        <h3>Fortschrittsfotos</h3>
+        <p>Dokumentiere deinen koerperlichen Fortschritt mit Vorher-Nachher-Fotos.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#127769;</div>
+        <h3>Dark Mode</h3>
+        <p>Augenfreundliches dunkles Design &mdash; perfekt fuers Studio.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots 9:16 Format -->
+  <div class="lp-section-alt">
+    <section class="lp-section" id="screenshots">
+      <h2 class="section-title">So sieht's aus</h2>
+      <p class="section-sub">Ein Blick in die App &mdash; einfach, uebersichtlich und mobil optimiert.</p>
+      <div class="screenshot-grid">
+        <div class="screenshot-placeholder">Screenshot 1<br><small>Dashboard</small></div>
+        <div class="screenshot-placeholder">Screenshot 2<br><small>Trainingsplan</small></div>
+        <div class="screenshot-placeholder">Screenshot 3<br><small>Uebungsdetail</small></div>
+        <div class="screenshot-placeholder">Screenshot 4<br><small>Statistiken</small></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Reasons -->
+  <section class="lp-section" id="reasons">
+    <h2 class="section-title">Warum {{ app_name }}?</h2>
+    <p class="section-sub">Es gibt viele Fitness-Apps &mdash; hier ist, was uns unterscheidet.</p>
+    <div class="reason-list">
+      <div class="reason-card">
+        <div class="reason-icon-wrap">&#128170;</div>
+        <div>
+          <h3>Einfach & fokussiert</h3>
+          <p>Kein Schnickschnack, keine Ablenkung. Nur das, was du fuers Training wirklich brauchst.</p>
+        </div>
+      </div>
+      <div class="reason-card">
+        <div class="reason-icon-wrap">&#128176;</div>
+        <div>
+          <h3>Komplett kostenlos</h3>
+          <p>Keine Premium-Version, keine versteckten Kosten. Alle Features sind frei verfuegbar.</p>
+        </div>
+      </div>
+      <div class="reason-card">
+        <div class="reason-icon-wrap">&#9889;</div>
+        <div>
+          <h3>Offline nutzbar</h3>
+          <p>Installiere die App und tracke auch ohne Internetverbindung im Fitnessstudio.</p>
+        </div>
+      </div>
+      <div class="reason-card">
+        <div class="reason-icon-wrap">&#128260;</div>
+        <div>
+          <h3>Teilen & Export</h3>
+          <p>Teile Trainingsplaene per Link oder exportiere sie als PDF zum Ausdrucken.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Footer -->
+  <section class="cta-footer">
+    <h2>Bereit loszulegen?</h2>
+    <p>Erstelle in Sekunden dein kostenloses Konto und starte dein Training.</p>
+    <div class="hero-btns">
+      <a href="{{ url_for('register') }}" class="lp-btn lp-btn-white lp-btn-lg">Jetzt registrieren</a>
+      <a href="{{ url_for('login') }}" class="lp-btn lp-btn-lg" style="border:1.5px solid rgba(255,255,255,0.5); color:#fff !important;">Zum Login</a>
+    </div>
+    <div class="cta-footer-bottom">
+      {% for page in footer_pages %}
+        <a href="{{ url_for('view_footer_page', page_id=page.id) }}" style="color: rgba(255,255,255,0.7); margin: 0 0.5rem;">{{ page.title }}</a>
+      {% endfor %}
+      {% for link in footer_links %}
+        <a href="{{ link.url }}" style="color: rgba(255,255,255,0.7); margin: 0 0.5rem;">{{ link.title }}</a>
+      {% endfor %}
+      <span style="display:block; margin-top:0.5rem;">&copy; {{ app_name }}</span>
+    </div>
+  </section>
+
+  <script>
+    // Dark mode: respect saved preference
+    (function() {
+      var saved = localStorage.getItem('theme');
+      if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        var target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -123,6 +123,41 @@ def run_migration(database_uri: str | None, dry_run: bool) -> None:
         altered |= add_column_if_missing("exercise", "is_separator", "BOOLEAN DEFAULT 0")
         altered |= add_column_if_missing("template_exercise", "is_separator", "BOOLEAN DEFAULT 0")
 
+        # Ensure app_settings table exists for existing databases
+        inspector = inspect(db.engine)
+        if 'app_settings' not in inspector.get_table_names():
+            LOGGER.info("Creating app_settings table")
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE TABLE app_settings ("
+                    "id INTEGER PRIMARY KEY, "
+                    "app_name VARCHAR(150) DEFAULT 'Gewichts-Tracker', "
+                    "chart_weight BOOLEAN DEFAULT 1, "
+                    "chart_reps BOOLEAN DEFAULT 1, "
+                    "chart_volume BOOLEAN DEFAULT 1, "
+                    "chart_volume_avg BOOLEAN DEFAULT 1, "
+                    "chart_1rm BOOLEAN DEFAULT 1, "
+                    "chart_1rm_avg BOOLEAN DEFAULT 1)"
+                ))
+            altered = True
+        else:
+            altered |= add_column_if_missing("app_settings", "app_name", "VARCHAR(150) DEFAULT 'Gewichts-Tracker'")
+
+        # Email verification columns on app_settings
+        altered |= add_column_if_missing("app_settings", "require_email_verification", "BOOLEAN DEFAULT 0")
+        altered |= add_column_if_missing("app_settings", "smtp_server", "VARCHAR(150)")
+        altered |= add_column_if_missing("app_settings", "smtp_port", "INTEGER DEFAULT 587")
+        altered |= add_column_if_missing("app_settings", "smtp_username", "VARCHAR(150)")
+        altered |= add_column_if_missing("app_settings", "smtp_password", "VARCHAR(150)")
+        altered |= add_column_if_missing("app_settings", "smtp_use_tls", "BOOLEAN DEFAULT 1")
+        altered |= add_column_if_missing("app_settings", "smtp_sender_email", "VARCHAR(150)")
+
+        # Email verification columns on user
+        altered |= add_column_if_missing("user", "email", "VARCHAR(150)")
+        altered |= add_column_if_missing("user", "email_confirmed", "BOOLEAN DEFAULT 1")
+        altered |= add_column_if_missing("user", "email_token", "VARCHAR(100)")
+        altered |= add_column_if_missing("user", "email_token_created", "DATETIME")
+
         # Backfill ownership information so that historical data stays accessible.
         exercise_updates = backfill_exercise_owners()
         session_updates = backfill_session_owners()
