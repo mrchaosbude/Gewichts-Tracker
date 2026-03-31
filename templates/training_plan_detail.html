@@ -396,9 +396,11 @@
                   {% if not item.is_separator %}
                   {% set summary = item.summary %}
                   {% set personal_bests = item.personal_bests %}
+                  {% set is_cardio = item.exercise.exercise_type == 'ausdauer' %}
                   <tr>
                     <td>
                       <strong>{{ item.exercise.name }}</strong>
+                      {% if is_cardio %}<span class="badge badge-warning" style="font-size:0.6rem;">Ausdauer</span>{% endif %}
                       {% if item.exercise.description %}
                         <div class="small text-muted">{{ item.exercise.description }}</div>
                       {% endif %}
@@ -407,20 +409,28 @@
                     <td>
                       {% if summary.latest_session %}
                         {{ summary.latest_session.timestamp.strftime('%d.%m.%Y') }}<br>
-                        <span class="small text-muted">{{ summary.latest_session.weight }} kg &times; {{ summary.latest_session.repetitions }}</span>
+                        {% if is_cardio %}
+                          <span class="small text-muted">{{ summary.latest_session.duration_minutes }} Min</span>
+                        {% else %}
+                          <span class="small text-muted">{{ summary.latest_session.weight }} kg &times; {{ summary.latest_session.repetitions }}</span>
+                        {% endif %}
                       {% else %}
                         <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
-                      {% if summary.total_sessions %}
+                      {% if is_cardio %}
+                        <span class="text-muted">&ndash;</span>
+                      {% elif summary.total_sessions %}
                         {{ summary.total_volume|round(1) }} kg
                       {% else %}
                         <span class="text-muted">&ndash;</span>
                       {% endif %}
                     </td>
                     <td>
-                      {% if personal_bests.max_weight %}
+                      {% if is_cardio %}
+                        <span class="text-muted">&ndash;</span>
+                      {% elif personal_bests.max_weight %}
                         {{ personal_bests.max_weight.value }} kg
                         <div class="small text-muted">{{ personal_bests.max_weight.repetitions }} Wdh</div>
                       {% else %}
@@ -428,7 +438,9 @@
                       {% endif %}
                     </td>
                     <td>
-                      {% if personal_bests.max_one_rm %}
+                      {% if is_cardio %}
+                        <span class="text-muted">&ndash;</span>
+                      {% elif personal_bests.max_one_rm %}
                         {{ personal_bests.max_one_rm.value|round(1) }} kg
                         <div class="small text-muted">{{ personal_bests.max_one_rm.weight }} kg &times; {{ personal_bests.max_one_rm.repetitions }}</div>
                       {% else %}
@@ -436,7 +448,9 @@
                       {% endif %}
                     </td>
                     <td>
-                      {% if summary.total_sessions %}
+                      {% if is_cardio %}
+                        <span class="text-muted">&ndash;</span>
+                      {% elif summary.total_sessions %}
                         {{ summary.recent_volume_average|round(1) }} kg
                       {% else %}
                         <span class="text-muted">&ndash;</span>
@@ -492,6 +506,9 @@
             <div class="ex-top">
               <div style="min-width:0">
                 <span class="ex-name">{{ item.exercise.name }}</span>
+                {% if item.exercise.exercise_type == 'ausdauer' %}
+                  <span class="badge badge-warning" style="font-size:0.65rem; vertical-align:middle; padding:0.1rem 0.4rem;">Ausdauer</span>
+                {% endif %}
                 {% if item.superset_group %}
                   <span class="badge-ss badge-ss-{{ item.superset_group % 5 }}">Superset {{ item.superset_group }}</span>
                 {% endif %}
@@ -524,7 +541,11 @@
               {% for session in item.recent_sessions %}
                 <div class="sess">
                   <span class="sess-date">{{ session.timestamp.strftime('%d.%m.%y') }}</span>
-                  <span>{{ session.weight }}&nbsp;kg &times; {{ session.repetitions }}</span>
+                  {% if item.exercise.exercise_type == 'ausdauer' %}
+                    <span>{{ session.duration_minutes }} Min{% if session.distance_km %} &middot; {{ session.distance_km }} km{% endif %}</span>
+                  {% else %}
+                    <span>{{ session.weight }}&nbsp;kg &times; {{ session.repetitions }}</span>
+                  {% endif %}
                 </div>
               {% else %}
                 <div class="sess-empty">Noch keine Einheiten erfasst.</div>

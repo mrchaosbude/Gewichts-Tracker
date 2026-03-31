@@ -30,6 +30,7 @@
       color: #eaeaea;
     }
     [data-theme="dark"] .separator-hint { color: #a0a0a0; }
+    .type-toggle .btn { font-size: 0.88rem; }
   </style>
 {% endblock %}
 
@@ -47,6 +48,19 @@
           <span class="separator-hint">(kein Exercise, nur visuelle Trennung)</span>
         </label>
 
+        <!-- Typ-Toggle: Kraft / Ausdauer -->
+        <div class="form-group type-toggle" id="typeRow">
+          <label class="small font-weight-bold d-block mb-1">Übungstyp</label>
+          <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
+            <label class="btn btn-outline-primary active" id="lblKraft">
+              <input type="radio" name="exercise_type" value="kraft" id="typeKraft" autocomplete="off" checked> Kraft
+            </label>
+            <label class="btn btn-outline-warning" id="lblAusdauer">
+              <input type="radio" name="exercise_type" value="ausdauer" id="typeAusdauer" autocomplete="off"> Ausdauer
+            </label>
+          </div>
+        </div>
+
         <div id="exerciseFields">
           <div class="form-group" id="existingGroup">
             <label class="small font-weight-bold" for="existing_exercise">Vorhandene Übung verwenden</label>
@@ -57,7 +71,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="nameGroup">
             {{ form.name.label(class="small font-weight-bold") }} {{ form.name(class="form-control") }}
           </div>
           <div class="form-group" id="descGroup">
@@ -71,6 +85,27 @@
             {{ form.muscle_group.label(class="small font-weight-bold") }} {{ form.muscle_group(class="form-control") }}
           </div>
         </div>
+
+        <!-- Ausdauer-Felder (nur sichtbar wenn Ausdauer gewählt) -->
+        <div id="cardioFields" style="display:none;">
+          <div class="form-group">
+            <label class="small font-weight-bold" for="cardioSelect">Ausdauer-Aktivität</label>
+            <select id="cardioSelect" class="form-control">
+              <option value="">-- Auswählen oder unten eingeben --</option>
+              {% for c in cardio_exercises %}
+                <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
+              <option value="__custom__">Eigene eingeben...</option>
+            </select>
+          </div>
+          <div class="form-group" id="cardioCustomGroup" style="display:none;">
+            <label class="small font-weight-bold" for="cardioCustomInput">Eigene Bezeichnung</label>
+            <input type="text" id="cardioCustomInput" class="form-control" placeholder="z.B. Klettern, Boxen, Yoga...">
+          </div>
+          <input type="hidden" name="cardio_type" id="cardioTypeHidden">
+          <input type="hidden" name="cardio_custom" id="cardioCustomHidden">
+        </div>
+
         {{ form.submit(class="btn btn-primary btn-block", id="submitBtn") }}
       </form>
     </div>
@@ -83,15 +118,29 @@
     document.addEventListener('DOMContentLoaded', function() {
       const select = document.querySelector('select[name="existing_exercise_id"]');
       const nameInput = document.getElementById('name');
-      const nameLabel = nameInput.previousElementSibling;
+      const nameLabel = document.querySelector('label[for="name"]');
       const descInput = document.getElementById('description');
       const videoInput = document.getElementById('video_url');
       const sepCheck = document.getElementById('is_separator');
       const existingGroup = document.getElementById('existingGroup');
+      const nameGroup = document.getElementById('nameGroup');
       const descGroup = document.getElementById('descGroup');
       const videoGroup = document.getElementById('videoGroup');
       const muscleGroup = document.getElementById('muscleGroup');
       const submitBtn = document.getElementById('submitBtn');
+      const typeRow = document.getElementById('typeRow');
+      const exerciseFields = document.getElementById('exerciseFields');
+      const cardioFields = document.getElementById('cardioFields');
+      const cardioSelect = document.getElementById('cardioSelect');
+      const cardioCustomGroup = document.getElementById('cardioCustomGroup');
+      const cardioCustomInput = document.getElementById('cardioCustomInput');
+      const cardioTypeHidden = document.getElementById('cardioTypeHidden');
+      const cardioCustomHidden = document.getElementById('cardioCustomHidden');
+
+      function getSelectedType() {
+        const checked = document.querySelector('input[name="exercise_type"]:checked');
+        return checked ? checked.value : 'kraft';
+      }
 
       function fillFields() {
         var option = select.options[select.selectedIndex];
@@ -106,21 +155,66 @@
         }
       }
 
+      function updateTypeFields() {
+        var isSep = sepCheck.checked;
+        var isAusdauer = !isSep && getSelectedType() === 'ausdauer';
+
+        // Ausdauer-Felder
+        cardioFields.style.display = isAusdauer ? '' : 'none';
+
+        // Kraft-spezifische Felder
+        existingGroup.style.display = (isAusdauer || isSep) ? 'none' : '';
+        descGroup.style.display = isAusdauer ? 'none' : '';
+        videoGroup.style.display = isAusdauer ? 'none' : '';
+        muscleGroup.style.display = isAusdauer ? 'none' : '';
+        nameGroup.style.display = isAusdauer ? 'none' : '';
+      }
+
       function toggleSeparatorMode() {
         var isSep = sepCheck.checked;
-        existingGroup.style.display = isSep ? 'none' : '';
-        descGroup.style.display = isSep ? 'none' : '';
-        videoGroup.style.display = isSep ? 'none' : '';
-        muscleGroup.style.display = isSep ? 'none' : '';
-        nameLabel.textContent = isSep ? 'Bezeichnung' : 'Übungsname';
-        nameInput.placeholder = isSep ? 'z.B. Beine, Push, Tag 1...' : '';
-        submitBtn.value = isSep ? 'Trenner hinzufügen' : 'Übung hinzufügen';
+        typeRow.style.display = isSep ? 'none' : '';
+        updateTypeFields();
+
         if (isSep) {
+          nameGroup.style.display = '';
+          descGroup.style.display = 'none';
+          videoGroup.style.display = 'none';
+          muscleGroup.style.display = 'none';
+          existingGroup.style.display = 'none';
+          cardioFields.style.display = 'none';
+          if (nameLabel) nameLabel.textContent = 'Bezeichnung';
+          if (nameInput) nameInput.placeholder = 'z.B. Beine, Push, Tag 1...';
+          submitBtn.value = 'Trenner hinzufügen';
           select.selectedIndex = 0;
           descInput.value = '';
           videoInput.value = '';
+        } else {
+          if (nameLabel) nameLabel.textContent = 'Übungsname';
+          if (nameInput) nameInput.placeholder = '';
+          submitBtn.value = 'Übung hinzufügen';
+          updateTypeFields();
         }
       }
+
+      cardioSelect.addEventListener('change', function() {
+        if (cardioSelect.value === '__custom__') {
+          cardioCustomGroup.style.display = '';
+          cardioTypeHidden.value = '';
+          cardioCustomHidden.value = cardioCustomInput.value;
+        } else {
+          cardioCustomGroup.style.display = 'none';
+          cardioTypeHidden.value = cardioSelect.value;
+          cardioCustomHidden.value = '';
+        }
+      });
+
+      cardioCustomInput.addEventListener('input', function() {
+        cardioCustomHidden.value = cardioCustomInput.value;
+      });
+
+      document.querySelectorAll('input[name="exercise_type"]').forEach(function(r) {
+        r.addEventListener('change', updateTypeFields);
+      });
 
       select.addEventListener('change', fillFields);
       sepCheck.addEventListener('change', toggleSeparatorMode);

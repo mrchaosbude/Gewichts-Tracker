@@ -17,7 +17,7 @@ import bleach
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField, SelectField
+from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField, SelectField, DecimalField
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
 from urllib.parse import urlparse
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -108,6 +108,11 @@ MUSCLE_GROUPS = [
     'Beine', 'Waden', 'Bauch', 'Unterarme', 'Ganzkörper', 'Sonstiges',
 ]
 
+CARDIO_EXERCISES = [
+    'Laufen', 'Radfahren', 'Rudern', 'Seilspringen',
+    'Ellipsentrainer', 'Schwimmen', 'Wandern', 'Skifahren',
+]
+
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
@@ -115,6 +120,7 @@ class Exercise(db.Model):
     video_url = db.Column(db.String(500), nullable=True)
     muscle_group = db.Column(db.String(50), nullable=True)
     is_separator = db.Column(db.Boolean, default=False)
+    exercise_type = db.Column(db.String(20), nullable=True, default='kraft')  # 'kraft' oder 'ausdauer'
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
     training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
@@ -122,11 +128,15 @@ class Exercise(db.Model):
 class ExerciseSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
-    repetitions = db.Column(db.Integer, nullable=False)
-    weight = db.Column(db.Integer, nullable=False)  # Gewicht als Integer
+    repetitions = db.Column(db.Integer, nullable=True)
+    weight = db.Column(db.Integer, nullable=True)  # Gewicht als Integer (nur Kraft)
     timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
     notes = db.Column(db.Text)
     perceived_exertion = db.Column(db.Integer)
+    duration_minutes = db.Column(db.Integer, nullable=True)   # Ausdauer: Dauer in Minuten
+    distance_km = db.Column(db.Float, nullable=True)           # Ausdauer: Distanz in km
+    warmup_activity = db.Column(db.String(100), nullable=True) # Aufwärmung: Aktivität
+    warmup_duration = db.Column(db.Integer, nullable=True)     # Aufwärmung: Dauer in Minuten
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
 # Modelle für Template Trainingspläne
@@ -389,15 +399,21 @@ class TrainingPlanForm(FlaskForm):
 
 class ExerciseTemplateForm(FlaskForm):
     is_separator = BooleanField('Als Trenner/Abschnitt hinzufügen')
-    name = StringField('Übungsname', validators=[DataRequired()])
+    exercise_type = SelectField('Übungstyp', choices=[('kraft', 'Kraft'), ('ausdauer', 'Ausdauer')], default='kraft')
+    name = StringField('Übungsname', validators=[Optional()])
     description = StringField('Beschreibung (optional)')
     video_url = StringField('Video/Anleitung URL (optional)')
     muscle_group = SelectField('Muskelgruppe (optional)', choices=[('', '-- Keine --')] + [(mg, mg) for mg in MUSCLE_GROUPS], default='')
+    cardio_type = StringField('Ausdauer-Aktivität', validators=[Optional()])
     submit = SubmitField('Übung hinzufügen')
 
 class ExerciseSessionForm(FlaskForm):
-    repetitions = IntegerField('Wiederholungen', validators=[DataRequired()], render_kw={"onfocus": "this.select()"})
-    weight = IntegerField('Gewicht (kg)', validators=[InputRequired()], render_kw={"step": "1", "onfocus": "this.select()"})
+    repetitions = IntegerField('Wiederholungen', validators=[Optional()], render_kw={"onfocus": "this.select()"})
+    weight = IntegerField('Gewicht (kg)', validators=[Optional()], render_kw={"step": "1", "onfocus": "this.select()"})
+    duration_minutes = IntegerField('Dauer (Minuten)', validators=[Optional()], render_kw={"onfocus": "this.select()"})
+    distance_km = DecimalField('Distanz (km, optional)', validators=[Optional()], places=2, render_kw={"onfocus": "this.select()", "step": "0.1"})
+    warmup_activity = StringField('Aufwärm-Aktivität', validators=[Optional()])
+    warmup_duration = IntegerField('Aufwärm-Dauer (Min)', validators=[Optional()], render_kw={"onfocus": "this.select()"})
     perceived_exertion = IntegerField(
         'Wahrgenommene Anstrengung (RPE 1-10, optional)',
         validators=[Optional(), NumberRange(min=1, max=10)],
@@ -685,6 +701,18 @@ def check_deload_reminder(user_id, threshold_weeks=6):
     return consecutive >= threshold_weeks, consecutive
 
 
+def _session_volume(s):
+    """Safely compute volume for a session, returns 0 for cardio sessions."""
+    if s.weight is not None and s.repetitions is not None:
+        return s.weight * s.repetitions
+    return 0
+
+
+def _session_weight(s):
+    """Safely get weight for a session, returns 0 for cardio sessions."""
+    return s.weight if s.weight is not None else 0
+
+
 def calculate_exercise_statistics(sessions, moving_window=5):
     sorted_sessions = sorted(sessions, key=lambda s: s.timestamp)
     chart_data = {
@@ -729,8 +757,10 @@ def calculate_exercise_statistics(sessions, moving_window=5):
         chart_data['repetitions'].append(session.repetitions)
         chart_data['notes'].append(session.notes or '')
         chart_data['perceived_exertion'].append(session.perceived_exertion)
-        chart_data['volume'].append(session.weight * session.repetitions)
-        chart_data['one_rm'].append(round(session.weight * (1 + session.repetitions / 30.0), 2))
+        chart_data['volume'].append(_session_volume(session))
+        w = session.weight or 0
+        r = session.repetitions or 0
+        chart_data['one_rm'].append(round(w * (1 + r / 30.0), 2))
 
     moving_avg_weight = _moving_average(chart_data['weights'], moving_window)
     moving_avg_volume = _moving_average(chart_data['volume'], moving_window)
@@ -835,6 +865,8 @@ def check_new_personal_records(exercise_id, user_id, new_weight, new_reps):
         .filter_by(exercise_id=exercise_id, user_id=user_id)
         .all()
     )
+    # Nur Sessions mit Gewicht/Reps berücksichtigen
+    previous_sessions = [s for s in previous_sessions if s.weight is not None and s.repetitions is not None]
     if not previous_sessions:
         return []
     records = []
@@ -1024,7 +1056,7 @@ def dashboard():
         .all()
     )
     week_sets = len(week_sessions)
-    week_volume = sum(s.weight * s.repetitions for s in week_sessions)
+    week_volume = sum(_session_volume(s) for s in week_sessions)
     week_days = len(set(s.timestamp.date() for s in week_sessions))
 
     # Trainings-Streak (aufeinanderfolgende Wochen mit Training)
@@ -1079,11 +1111,15 @@ def statistics():
         .order_by(ExerciseSession.timestamp.desc())
         .all()
     )
-    # --- Muskelgruppen-Volumen ---
+    # Kraft- und Ausdauer-Sessions trennen
+    kraft_sessions = [s for s in all_sessions if s.weight is not None and s.repetitions is not None]
+    cardio_sessions = [s for s in all_sessions if s.exercise.exercise_type == 'ausdauer']
+
+    # --- Muskelgruppen-Volumen (nur Kraft) ---
     muscle_volume = {}
-    for s in all_sessions:
+    for s in kraft_sessions:
         mg = s.exercise.muscle_group or 'Nicht zugeordnet'
-        volume = s.weight * s.repetitions
+        volume = _session_volume(s)
         muscle_volume[mg] = muscle_volume.get(mg, 0) + volume
     muscle_labels = list(muscle_volume.keys())
     muscle_values = list(muscle_volume.values())
@@ -1094,21 +1130,21 @@ def statistics():
     this_monday = today - datetime.timedelta(days=today.weekday())
     last_monday = this_monday - datetime.timedelta(days=7)
     this_week_sessions = [
-        s for s in all_sessions
+        s for s in kraft_sessions
         if s.timestamp.date() >= this_monday
     ]
     last_week_sessions = [
-        s for s in all_sessions
+        s for s in kraft_sessions
         if last_monday <= s.timestamp.date() < this_monday
     ]
-    this_week_volume = sum(s.weight * s.repetitions for s in this_week_sessions)
-    last_week_volume = sum(s.weight * s.repetitions for s in last_week_sessions)
+    this_week_volume = sum(_session_volume(s) for s in this_week_sessions)
+    last_week_volume = sum(_session_volume(s) for s in last_week_sessions)
     this_week_sets = len(this_week_sessions)
     last_week_sets = len(last_week_sessions)
     volume_diff = this_week_volume - last_week_volume
     sets_diff = this_week_sets - last_week_sets
 
-    # Vergleich pro Übung
+    # Vergleich pro Übung (nur Kraft)
     exercise_comparison = []
     this_week_by_exercise = {}
     last_week_by_exercise = {}
@@ -1117,15 +1153,15 @@ def statistics():
         if name not in this_week_by_exercise:
             this_week_by_exercise[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
         this_week_by_exercise[name]['sets'] += 1
-        this_week_by_exercise[name]['volume'] += s.weight * s.repetitions
-        this_week_by_exercise[name]['max_weight'] = max(this_week_by_exercise[name]['max_weight'], s.weight)
+        this_week_by_exercise[name]['volume'] += _session_volume(s)
+        this_week_by_exercise[name]['max_weight'] = max(this_week_by_exercise[name]['max_weight'], _session_weight(s))
     for s in last_week_sessions:
         name = s.exercise.name
         if name not in last_week_by_exercise:
             last_week_by_exercise[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
         last_week_by_exercise[name]['sets'] += 1
-        last_week_by_exercise[name]['volume'] += s.weight * s.repetitions
-        last_week_by_exercise[name]['max_weight'] = max(last_week_by_exercise[name]['max_weight'], s.weight)
+        last_week_by_exercise[name]['volume'] += _session_volume(s)
+        last_week_by_exercise[name]['max_weight'] = max(last_week_by_exercise[name]['max_weight'], _session_weight(s))
     all_exercise_names = sorted(set(list(this_week_by_exercise.keys()) + list(last_week_by_exercise.keys())))
     for name in all_exercise_names:
         tw = this_week_by_exercise.get(name, {'sets': 0, 'volume': 0, 'max_weight': 0})
@@ -1143,17 +1179,59 @@ def statistics():
     for i in range(11, -1, -1):
         week_start = this_monday - datetime.timedelta(weeks=i)
         week_end = week_start + datetime.timedelta(days=7)
-        week_sessions = [
-            s for s in all_sessions
+        week_sess = [
+            s for s in kraft_sessions
             if week_start <= s.timestamp.date() < week_end
         ]
-        training_days = len(set(s.timestamp.date() for s in week_sessions))
+        training_days = len(set(s.timestamp.date() for s in week_sess))
         week_label = week_start.strftime('%d.%m')
         frequency_data.append({
             'label': week_label,
             'days': training_days,
-            'sets': len(week_sessions),
-            'volume': sum(s.weight * s.repetitions for s in week_sessions),
+            'sets': len(week_sess),
+            'volume': sum(_session_volume(s) for s in week_sess),
+        })
+
+    # --- Ausdauer-Statistiken ---
+    cardio_total_sessions = len(cardio_sessions)
+    cardio_total_duration = sum(s.duration_minutes or 0 for s in cardio_sessions)
+    cardio_total_distance = sum(s.distance_km or 0 for s in cardio_sessions)
+    cardio_avg_duration = round(cardio_total_duration / cardio_total_sessions) if cardio_total_sessions else 0
+
+    # Ausdauer diese Woche vs. letzte Woche
+    cardio_this_week = [s for s in cardio_sessions if s.timestamp.date() >= this_monday]
+    cardio_last_week = [s for s in cardio_sessions if last_monday <= s.timestamp.date() < this_monday]
+    cardio_tw_duration = sum(s.duration_minutes or 0 for s in cardio_this_week)
+    cardio_lw_duration = sum(s.duration_minutes or 0 for s in cardio_last_week)
+    cardio_tw_distance = sum(s.distance_km or 0 for s in cardio_this_week)
+    cardio_lw_distance = sum(s.distance_km or 0 for s in cardio_last_week)
+
+    # Ausdauer pro Aktivität
+    cardio_by_activity = {}
+    for s in cardio_sessions:
+        name = s.exercise.name
+        if name not in cardio_by_activity:
+            cardio_by_activity[name] = {'sessions': 0, 'duration': 0, 'distance': 0}
+        cardio_by_activity[name]['sessions'] += 1
+        cardio_by_activity[name]['duration'] += s.duration_minutes or 0
+        cardio_by_activity[name]['distance'] += s.distance_km or 0
+    cardio_activities = sorted(cardio_by_activity.items(), key=lambda x: x[1]['duration'], reverse=True)
+
+    # Ausdauer-Frequenz (letzte 12 Wochen)
+    cardio_frequency_data = []
+    for i in range(11, -1, -1):
+        week_start = this_monday - datetime.timedelta(weeks=i)
+        week_end = week_start + datetime.timedelta(days=7)
+        week_cardio = [
+            s for s in cardio_sessions
+            if week_start <= s.timestamp.date() < week_end
+        ]
+        week_label = week_start.strftime('%d.%m')
+        cardio_frequency_data.append({
+            'label': week_label,
+            'sessions': len(week_cardio),
+            'duration': sum(s.duration_minutes or 0 for s in week_cardio),
+            'distance': round(sum(s.distance_km or 0 for s in week_cardio), 1),
         })
 
     return render_template(
@@ -1168,6 +1246,19 @@ def statistics():
         sets_diff=sets_diff,
         exercise_comparison=exercise_comparison,
         frequency_data=frequency_data,
+        # Cardio
+        cardio_total_sessions=cardio_total_sessions,
+        cardio_total_duration=cardio_total_duration,
+        cardio_total_distance=round(cardio_total_distance, 1),
+        cardio_avg_duration=cardio_avg_duration,
+        cardio_tw_duration=cardio_tw_duration,
+        cardio_lw_duration=cardio_lw_duration,
+        cardio_tw_distance=round(cardio_tw_distance, 1),
+        cardio_lw_distance=round(cardio_lw_distance, 1),
+        cardio_tw_sessions=len(cardio_this_week),
+        cardio_lw_sessions=len(cardio_last_week),
+        cardio_activities=cardio_activities,
+        cardio_frequency_data=cardio_frequency_data,
     )
 
 
@@ -1364,7 +1455,7 @@ def training_calendar():
     # Gesamtstatistik für den Monat
     total_sessions = len(sessions)
     training_days = len(day_counts)
-    total_volume = sum(s.weight * s.repetitions for s in sessions)
+    total_volume = sum(_session_volume(s) for s in sessions)
     return render_template(
         'training_calendar.html',
         calendar_weeks=calendar_weeks,
@@ -1584,17 +1675,50 @@ def training_plan_detail(training_plan_id):
             })
             continue
         user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
-        stats = calculate_exercise_statistics(user_sessions)
-        recent_sessions = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
-        exercise_overview.append({
-            'exercise': exercise,
-            'summary': stats['summary'],
-            'personal_bests': stats['personal_bests'],
-            'recent_sessions': recent_sessions,
-            'moving_window': stats['moving_window'],
-            'superset_group': superset_map.get(exercise.id),
-            'is_separator': False,
-        })
+        is_cardio = (exercise.exercise_type == 'ausdauer')
+        if is_cardio:
+            # Einfache Cardio-Stats (keine Gewicht/Reps-Berechnungen)
+            recent_sessions_sorted = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
+            latest = recent_sessions_sorted[0] if recent_sessions_sorted else None
+            cardio_summary = {
+                'total_sessions': len(user_sessions),
+                'total_volume': 0,
+                'average_volume': 0,
+                'average_weight': 0,
+                'latest_session': {
+                    'timestamp': latest.timestamp,
+                    'weight': None,
+                    'repetitions': None,
+                    'duration_minutes': latest.duration_minutes,
+                    'volume': 0,
+                    'one_rm': 0,
+                } if latest else None,
+                'recent_volume_average': 0,
+                'recent_one_rm_average': 0,
+            }
+            exercise_overview.append({
+                'exercise': exercise,
+                'summary': cardio_summary,
+                'personal_bests': {'max_weight': None, 'max_volume': None, 'max_one_rm': None},
+                'recent_sessions': recent_sessions_sorted,
+                'moving_window': 5,
+                'superset_group': superset_map.get(exercise.id),
+                'is_separator': False,
+            })
+        else:
+            # Nur Kraft-Sessions für die Statistikberechnung verwenden
+            kraft_sessions = [s for s in user_sessions if s.weight is not None and s.repetitions is not None]
+            stats = calculate_exercise_statistics(kraft_sessions)
+            recent_sessions = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)[:3]
+            exercise_overview.append({
+                'exercise': exercise,
+                'summary': stats['summary'],
+                'personal_bests': stats['personal_bests'],
+                'recent_sessions': recent_sessions,
+                'moving_window': stats['moving_window'],
+                'superset_group': superset_map.get(exercise.id),
+                'is_separator': False,
+            })
     return render_template(
         'training_plan_detail.html',
         training_plan=training_plan,
@@ -1800,13 +1924,28 @@ def add_exercise_to_plan(training_plan_id):
                 if not any(p.user_id == current_user.id for p in exercise.training_plans):
                     abort(403)
             else:
-                exercise = Exercise(
-                    name=form.name.data,
-                    description=form.description.data,
-                    video_url=form.video_url.data or None,
-                    muscle_group=form.muscle_group.data or None,
-                    user_id=current_user.id,
-                )
+                exercise_type = form.exercise_type.data or 'kraft'
+                if exercise_type == 'ausdauer':
+                    cardio_name = (request.form.get('cardio_custom') or form.cardio_type.data or '').strip()
+                    exercise_name = cardio_name if cardio_name else 'Ausdauer'
+                    exercise = Exercise(
+                        name=exercise_name,
+                        exercise_type='ausdauer',
+                        user_id=current_user.id,
+                    )
+                else:
+                    if not form.name.data:
+                        flash('Bitte einen Übungsnamen eingeben.', 'danger')
+                        return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan,
+                                               existing_exercises=existing_exercises, cardio_exercises=CARDIO_EXERCISES)
+                    exercise = Exercise(
+                        name=form.name.data,
+                        description=form.description.data,
+                        video_url=form.video_url.data or None,
+                        muscle_group=form.muscle_group.data or None,
+                        exercise_type='kraft',
+                        user_id=current_user.id,
+                    )
                 db.session.add(exercise)
                 db.session.flush()
         if exercise not in training_plan.exercises:
@@ -1814,7 +1953,8 @@ def add_exercise_to_plan(training_plan_id):
         db.session.commit()
         flash('Trenner hinzugefügt!' if form.is_separator.data else 'Übung hinzugefügt!', 'success')
         return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
-    return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan, existing_exercises=existing_exercises)
+    return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan,
+                           existing_exercises=existing_exercises, cardio_exercises=CARDIO_EXERCISES)
 
 @app.route('/exercise/<int:exercise_id>/add_session', methods=['GET','POST'])
 @login_required
@@ -1824,7 +1964,19 @@ def add_session(exercise_id):
         abort(400)
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
+    is_cardio = (exercise.exercise_type == 'ausdauer')
     form = ExerciseSessionForm()
+    # Eigene Ausdauerübungen des Nutzers für das Aufwärm-Dropdown
+    user_cardio_exercises = (
+        Exercise.query
+        .join(Exercise.training_plans)
+        .filter(TrainingPlan.user_id == current_user.id)
+        .filter(Exercise.exercise_type == 'ausdauer')
+        .filter(Exercise.is_separator != True)
+        .order_by(Exercise.name)
+        .distinct()
+        .all()
+    )
     if request.method == 'GET':
         last_session = (
             ExerciseSession.query
@@ -1833,20 +1985,49 @@ def add_session(exercise_id):
             .first()
         )
         if last_session:
-            form.repetitions.data = last_session.repetitions
-            form.weight.data = int(last_session.weight)
+            if is_cardio:
+                form.duration_minutes.data = last_session.duration_minutes
+                form.distance_km.data = last_session.distance_km
+            else:
+                form.repetitions.data = last_session.repetitions
+                form.weight.data = int(last_session.weight) if last_session.weight is not None else None
             form.perceived_exertion.data = last_session.perceived_exertion
             form.notes.data = last_session.notes
     if form.validate_on_submit():
-        # PR-Check vor dem Speichern
-        pr_records = check_new_personal_records(
-            exercise_id, current_user.id,
-            form.weight.data, form.repetitions.data
-        )
+        # Konditionelle Pflichtfeld-Prüfung
+        if is_cardio:
+            if not form.duration_minutes.data:
+                form.duration_minutes.errors.append('Dauer ist erforderlich.')
+                return render_template('add_session.html', form=form, exercise=exercise,
+                                       is_cardio=is_cardio, cardio_exercises=CARDIO_EXERCISES,
+                                       user_cardio_exercises=user_cardio_exercises)
+        else:
+            if form.weight.data is None:
+                form.weight.errors.append('Gewicht ist erforderlich.')
+                return render_template('add_session.html', form=form, exercise=exercise,
+                                       is_cardio=is_cardio, cardio_exercises=CARDIO_EXERCISES,
+                                       user_cardio_exercises=user_cardio_exercises)
+            if not form.repetitions.data:
+                form.repetitions.errors.append('Wiederholungen sind erforderlich.')
+                return render_template('add_session.html', form=form, exercise=exercise,
+                                       is_cardio=is_cardio, cardio_exercises=CARDIO_EXERCISES,
+                                       user_cardio_exercises=user_cardio_exercises)
+        # PR-Check nur für Kraftübungen
+        pr_records = []
+        if not is_cardio:
+            pr_records = check_new_personal_records(
+                exercise_id, current_user.id,
+                form.weight.data, form.repetitions.data
+            )
+        distance_val = float(form.distance_km.data) if form.distance_km.data else None
         new_session = ExerciseSession(
             exercise_id=exercise_id,
-            repetitions=form.repetitions.data,
-            weight=form.weight.data,
+            repetitions=form.repetitions.data if not is_cardio else None,
+            weight=form.weight.data if not is_cardio else None,
+            duration_minutes=form.duration_minutes.data if is_cardio else None,
+            distance_km=distance_val if is_cardio else None,
+            warmup_activity=form.warmup_activity.data or None,
+            warmup_duration=form.warmup_duration.data or None,
             timestamp=datetime.datetime.now(),
             perceived_exertion=form.perceived_exertion.data,
             notes=form.notes.data,
@@ -1854,11 +2035,13 @@ def add_session(exercise_id):
         )
         db.session.add(new_session)
         db.session.commit()
-        flash('Satz hinzugefügt!', 'success')
+        flash('Eintrag hinzugefügt!', 'success')
         for pr in pr_records:
             flash(pr, 'warning')
         return redirect(url_for('exercise_detail', exercise_id=exercise_id))
-    return render_template('add_session.html', form=form, exercise=exercise)
+    return render_template('add_session.html', form=form, exercise=exercise,
+                           is_cardio=is_cardio, cardio_exercises=CARDIO_EXERCISES,
+                           user_cardio_exercises=user_cardio_exercises)
 
 @app.route('/exercise/<int:exercise_id>/detail')
 @login_required
@@ -1877,8 +2060,24 @@ def exercise_detail(exercise_id):
     all_sessions = session_query.order_by(ExerciseSession.timestamp.asc()).all()
     sessions = session_query.order_by(ExerciseSession.timestamp.desc()).limit(15).all()
 
-    stats = calculate_exercise_statistics(all_sessions)
-    progression = calculate_progression_suggestion(all_sessions)
+    is_cardio = (exercise.exercise_type == 'ausdauer')
+
+    if is_cardio:
+        stats = {'chart_data': {}, 'summary': {}, 'personal_bests': {}, 'moving_window': 5}
+        progression = None
+        total_dur = sum(s.duration_minutes or 0 for s in all_sessions)
+        total_dist = sum(s.distance_km or 0 for s in all_sessions)
+        avg_dur = round(total_dur / len(all_sessions)) if all_sessions else 0
+        cardio_stats = {
+            'total_sessions': len(all_sessions),
+            'total_duration': total_dur,
+            'avg_duration': avg_dur,
+            'total_distance': round(total_dist, 1) if total_dist else None,
+        }
+    else:
+        stats = calculate_exercise_statistics(all_sessions)
+        progression = calculate_progression_suggestion(all_sessions)
+        cardio_stats = None
 
     def serialize_session(s):
         return {
@@ -1886,6 +2085,10 @@ def exercise_detail(exercise_id):
             'timestamp': s.timestamp.strftime('%d.%m.%Y %H:%M'),
             'weight': s.weight,
             'repetitions': s.repetitions,
+            'duration_minutes': s.duration_minutes,
+            'distance_km': s.distance_km,
+            'warmup_activity': s.warmup_activity,
+            'warmup_duration': s.warmup_duration,
             'notes': s.notes,
             'perceived_exertion': s.perceived_exertion,
         }
@@ -1916,6 +2119,8 @@ def exercise_detail(exercise_id):
         moving_window=stats['moving_window'],
         progression=progression,
         chart_settings=chart_settings,
+        is_cardio=is_cardio,
+        cardio_stats=cardio_stats,
     )
 
 @app.route('/exercise/<int:exercise_id>/edit', methods=['GET', 'POST'])
@@ -2018,6 +2223,10 @@ def sync():
             exercise_id=exercise_id,
             repetitions=session_info.get('repetitions'),
             weight=session_info.get('weight'),
+            duration_minutes=session_info.get('duration_minutes'),
+            distance_km=session_info.get('distance_km'),
+            warmup_activity=session_info.get('warmup_activity'),
+            warmup_duration=session_info.get('warmup_duration'),
             timestamp=timestamp,
             notes=session_info.get('notes'),
             perceived_exertion=perceived_exertion,
@@ -2660,12 +2869,21 @@ def api_add_session(exercise_id):
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
     data = request.get_json() or {}
+    is_cardio = (exercise.exercise_type == 'ausdauer')
     repetitions = data.get('repetitions')
     weight = data.get('weight')
     notes = data.get('notes')
     perceived_exertion = data.get('perceived_exertion')
-    if repetitions is None or weight is None:
-        return jsonify({'error': 'repetitions and weight required'}), 400
+    duration_minutes = data.get('duration_minutes')
+    distance_km = data.get('distance_km')
+    warmup_activity = data.get('warmup_activity')
+    warmup_duration = data.get('warmup_duration')
+    if is_cardio:
+        if duration_minutes is None:
+            return jsonify({'error': 'duration_minutes required for cardio exercises'}), 400
+    else:
+        if repetitions is None or weight is None:
+            return jsonify({'error': 'repetitions and weight required'}), 400
     if perceived_exertion == '' or perceived_exertion is None:
         perceived_exertion = None
     else:
@@ -2673,13 +2891,19 @@ def api_add_session(exercise_id):
             perceived_exertion = int(perceived_exertion)
         except (TypeError, ValueError):
             return jsonify({'error': 'perceived_exertion must be an integer'}), 400
-    pr_records = check_new_personal_records(
-        exercise_id, current_user.id, int(weight), int(repetitions)
-    )
+    pr_records = []
+    if not is_cardio:
+        pr_records = check_new_personal_records(
+            exercise_id, current_user.id, int(weight), int(repetitions)
+        )
     new_session = ExerciseSession(
         exercise_id=exercise_id,
-        repetitions=repetitions,
-        weight=weight,
+        repetitions=repetitions if not is_cardio else None,
+        weight=weight if not is_cardio else None,
+        duration_minutes=duration_minutes if is_cardio else None,
+        distance_km=distance_km if is_cardio else None,
+        warmup_activity=warmup_activity,
+        warmup_duration=warmup_duration,
         timestamp=datetime.datetime.now(),
         notes=notes,
         perceived_exertion=perceived_exertion,

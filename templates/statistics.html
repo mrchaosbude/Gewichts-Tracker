@@ -14,6 +14,21 @@
       .chart-wrap { height: 360px; }
       .chart-wrap-lg { height: 380px; }
     }
+    .cardio-badge {
+      display: inline-block;
+      background: #ffc107;
+      color: #212529;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 0.3rem;
+      vertical-align: middle;
+    }
+    .stat-section-divider {
+      border-top: 2px solid #ffc107;
+      margin-top: 2rem;
+      padding-top: 0.5rem;
+    }
   </style>
 {% endblock %}
 
@@ -21,8 +36,10 @@
   <div class="page-wrap">
     <h2 class="page-title">Statistiken</h2>
 
+    {# ===================== KRAFT ===================== #}
+
     <!-- Wochenvergleich -->
-    <div class="section-label">Wochenvergleich</div>
+    <div class="section-label">Wochenvergleich (Kraft)</div>
     <div class="stat-row">
       <div class="stat-box">
         <div class="lbl">Letzte Woche</div>
@@ -101,6 +118,100 @@
         <canvas id="frequencyChart"></canvas>
       </div>
     </div>
+
+    {# ===================== AUSDAUER ===================== #}
+
+    {% if cardio_total_sessions > 0 %}
+    <div class="stat-section-divider">
+      <div class="section-label"><span class="cardio-badge" style="font-size:0.8rem;">Ausdauer</span> Übersicht</div>
+    </div>
+
+    <!-- Ausdauer Gesamt -->
+    <div class="stat-row">
+      <div class="stat-box blue">
+        <div class="val">{{ cardio_total_sessions }}</div>
+        <div class="lbl">Einheiten gesamt</div>
+      </div>
+      <div class="stat-box green">
+        <div class="val">{{ cardio_total_duration }}</div>
+        <div class="lbl">Minuten gesamt</div>
+      </div>
+      {% if cardio_total_distance %}
+      <div class="stat-box orange">
+        <div class="val">{{ cardio_total_distance }}</div>
+        <div class="lbl">km gesamt</div>
+      </div>
+      {% endif %}
+      <div class="stat-box purple">
+        <div class="val">{{ cardio_avg_duration }}</div>
+        <div class="lbl">Ø Min / Einheit</div>
+      </div>
+    </div>
+
+    <!-- Ausdauer Wochenvergleich -->
+    <div class="section-label mt-3">Wochenvergleich (Ausdauer)</div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="lbl">Letzte Woche</div>
+        <div class="val" style="font-size:1.2rem;">{{ cardio_lw_sessions }}</div>
+        <div class="lbl">Einheiten</div>
+        <div class="small text-muted">{{ cardio_lw_duration }} Min{% if cardio_lw_distance %} · {{ cardio_lw_distance }} km{% endif %}</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Diese Woche</div>
+        <div class="val" style="font-size:1.2rem;">{{ cardio_tw_sessions }}</div>
+        <div class="lbl">Einheiten</div>
+        <div class="small text-muted">{{ cardio_tw_duration }} Min{% if cardio_tw_distance %} · {{ cardio_tw_distance }} km{% endif %}</div>
+      </div>
+    </div>
+    <div class="text-center mb-3">
+      {% set dur_diff = cardio_tw_duration - cardio_lw_duration %}
+      {% if dur_diff > 0 %}
+        <span class="badge badge-success p-2">+{{ dur_diff }} Min</span>
+      {% elif dur_diff < 0 %}
+        <span class="badge badge-danger p-2">{{ dur_diff }} Min</span>
+      {% else %}
+        <span class="badge badge-secondary p-2">Gleiche Dauer</span>
+      {% endif %}
+    </div>
+
+    <!-- Ausdauer pro Aktivität -->
+    {% if cardio_activities %}
+    <div class="section-label mt-3">Ausdauer pro Aktivität</div>
+    <div class="s-card s-card-flush">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+          <thead>
+            <tr>
+              <th>Aktivität</th>
+              <th class="text-center">Einheiten</th>
+              <th class="text-center">Dauer</th>
+              <th class="text-center">Distanz</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name, data in cardio_activities %}
+            <tr>
+              <td>{{ name }}</td>
+              <td class="text-center">{{ data.sessions }}</td>
+              <td class="text-center">{{ data.duration }} Min</td>
+              <td class="text-center">{% if data.distance %}{{ data.distance|round(1) }} km{% else %}&ndash;{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Ausdauer-Frequenz Chart -->
+    <div class="section-label mt-3">Ausdauer-Frequenz (12 Wochen)</div>
+    <div class="s-card">
+      <div class="chart-wrap">
+        <canvas id="cardioFrequencyChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
 
     <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
@@ -187,5 +298,54 @@
         }
       }
     });
+
+    {% if cardio_total_sessions > 0 %}
+    const cardioFreqCtx = document.getElementById('cardioFrequencyChart').getContext('2d');
+    const cardioFreqData = {{ cardio_frequency_data|tojson }};
+    new Chart(cardioFreqCtx, {
+      type: 'bar',
+      data: {
+        labels: cardioFreqData.map(f => f.label),
+        datasets: [
+          {
+            label: 'Einheiten',
+            data: cardioFreqData.map(f => f.sessions),
+            backgroundColor: 'rgba(255, 193, 7, 0.7)',
+            yAxisID: 'ySessions',
+          },
+          {
+            label: 'Dauer (Min)',
+            data: cardioFreqData.map(f => f.duration),
+            type: 'line',
+            borderColor: 'rgba(255, 87, 34, 1)',
+            backgroundColor: 'rgba(255, 87, 34, 0.1)',
+            fill: true,
+            tension: 0.2,
+            yAxisID: 'yDuration',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          ySessions: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Einheiten' },
+            beginAtZero: true,
+            ticks: { stepSize: 1 }
+          },
+          yDuration: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Dauer (Min)' },
+            beginAtZero: true,
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+    {% endif %}
   </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Satz hinzufügen{% endblock %}
+{% block title %}{% if is_cardio %}Einheit eintragen{% else %}Satz hinzufügen{% endif %}{% endblock %}
 
 {% block extra_head %}
   <style>
@@ -15,29 +15,97 @@
       justify-content: center;
       z-index: 1050;
     }
+    .warmup-card { border-left: 3px solid #ffc107; }
+    .cardio-badge {
+      display: inline-block;
+      background: #ffc107;
+      color: #212529;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 0.3rem;
+      vertical-align: middle;
+      margin-left: 0.4rem;
+    }
   </style>
 {% endblock %}
 
 {% block content %}
   <div class="page-wrap">
-    <h2 class="page-title">{{ exercise.name }}</h2>
+    <h2 class="page-title">
+      {{ exercise.name }}
+      {% if is_cardio %}<span class="cardio-badge">Ausdauer</span>{% endif %}
+    </h2>
     {% if exercise.description %}
       <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">{{ exercise.description }}</p>
     {% endif %}
 
     <div class="s-card">
-      <form method="POST">
+      <form method="POST" id="sessionForm">
         {{ form.hidden_tag() }}
+
+        {% if not is_cardio %}
+        <!-- Aufwärmung (nur bei Kraftübungen) -->
+        <div class="s-card warmup-card mb-2 p-2" style="background:transparent;">
+          <div class="section-label mb-2" style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; color:#6c757d;">Aufwärmen (optional)</div>
+          <div class="form-row">
+            <div class="form-group col-8 mb-1">
+              <label class="small font-weight-bold" for="warmup_activity">Aktivität</label>
+              <select name="warmup_activity" id="warmup_activity" class="form-control form-control-sm">
+                <option value="">-- Kein Aufwärmen --</option>
+                {% for c in cardio_exercises %}
+                  <option value="{{ c }}" {% if form.warmup_activity.data == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+                {% for ex in user_cardio_exercises %}
+                  {% if ex.name not in cardio_exercises %}
+                    <option value="{{ ex.name }}" {% if form.warmup_activity.data == ex.name %}selected{% endif %}>{{ ex.name }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group col-4 mb-1">
+              <label class="small font-weight-bold" for="warmup_duration">Min</label>
+              {{ form.warmup_duration(class="form-control form-control-sm", id="warmup_duration", placeholder="Min") }}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if is_cardio %}
+        <!-- Ausdauer-Felder -->
+        <div class="form-row">
+          <div class="form-group col-6">
+            {{ form.duration_minutes.label(class="small font-weight-bold") }}
+            {{ form.duration_minutes(class="form-control", placeholder="Min") }}
+            {% if form.duration_minutes.errors %}
+              <div class="text-danger" style="font-size:0.8rem;">{{ form.duration_minutes.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="form-group col-6">
+            {{ form.distance_km.label(class="small font-weight-bold") }}
+            {{ form.distance_km(class="form-control", placeholder="km") }}
+          </div>
+        </div>
+        {% else %}
+        <!-- Kraft-Felder -->
         <div class="form-row">
           <div class="form-group col-6">
             {{ form.weight.label(class="small font-weight-bold") }}
             {{ form.weight(class="form-control", pattern="\\d*", placeholder="kg") }}
+            {% if form.weight.errors %}
+              <div class="text-danger" style="font-size:0.8rem;">{{ form.weight.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="form-group col-6">
             {{ form.repetitions.label(class="small font-weight-bold") }}
             {{ form.repetitions(class="form-control", pattern="\\d*", placeholder="Wdh") }}
+            {% if form.repetitions.errors %}
+              <div class="text-danger" style="font-size:0.8rem;">{{ form.repetitions.errors[0] }}</div>
+            {% endif %}
           </div>
         </div>
+        {% endif %}
+
         <div class="form-row">
           <div class="form-group col-4">
             {{ form.perceived_exertion.label(class="small font-weight-bold") }}
@@ -52,7 +120,8 @@
       </form>
     </div>
 
-    <!-- Pause-Timer -->
+    {% if not is_cardio %}
+    <!-- Pause-Timer (nur für Kraftübungen) -->
     <div class="s-card mt-2">
       <div class="section-label mb-2">Pause-Timer</div>
       <div class="form-row align-items-end">
@@ -64,10 +133,12 @@
         </div>
       </div>
     </div>
+    {% endif %}
 
     <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="back-link">&larr; Zurück</a>
   </div>
 
+  {% if not is_cardio %}
   <div id="restOverlay" class="rest-overlay d-none">
     <svg width="200" height="200" class="mb-3">
       <circle cx="100" cy="100" r="90" stroke="#555" stroke-width="10" fill="none" />
@@ -76,27 +147,43 @@
     </svg>
     <div class="text-center">Pause ...</div>
   </div>
+  {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="/static/js/main.js"></script>
   <script>
+    {% if not is_cardio %}
     const restInput = document.getElementById('restTime');
     const savedRest = localStorage.getItem('lastRestTime');
     if (savedRest) {
       restInput.value = savedRest;
     }
+    {% endif %}
 
-    document.querySelector('form').addEventListener('submit', function (e) {
+    document.getElementById('sessionForm').addEventListener('submit', function (e) {
       if (!navigator.onLine) {
         e.preventDefault();
         const rpeValue = document.getElementById('perceived_exertion').value;
         const parsedRpe = rpeValue ? parseInt(rpeValue, 10) : null;
         const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
+        const warmupSel = document.getElementById('warmup_activity');
+        const warmupDurEl = document.getElementById('warmup_duration');
         saveOfflineSession({
           exercise_id: {{ exercise.id }},
+          {% if is_cardio %}
+          duration_minutes: document.getElementById('duration_minutes').value || null,
+          distance_km: document.getElementById('distance_km').value || null,
+          repetitions: null,
+          weight: null,
+          {% else %}
           repetitions: document.getElementById('repetitions').value,
           weight: document.getElementById('weight').value,
+          duration_minutes: null,
+          distance_km: null,
+          warmup_activity: warmupSel ? (warmupSel.value || null) : null,
+          warmup_duration: warmupDurEl ? (warmupDurEl.value || null) : null,
+          {% endif %}
           perceived_exertion: normalizedRpe,
           notes: document.getElementById('notes').value || null,
           timestamp: new Date().toISOString()
@@ -106,6 +193,7 @@
       }
     });
 
+    {% if not is_cardio %}
     function formatTime(sec) {
       const m = Math.floor(sec / 60).toString().padStart(2, '0');
       const s = (sec % 60).toString().padStart(2, '0');
@@ -146,6 +234,8 @@
       const rpeRaw = document.getElementById('perceived_exertion').value;
       const parsedRpe = rpeRaw ? parseInt(rpeRaw, 10) : null;
       const normalizedRpe = Number.isNaN(parsedRpe) ? null : parsedRpe;
+      const warmupSel = document.getElementById('warmup_activity');
+      const warmupDurEl = document.getElementById('warmup_duration');
       if (!reps || !weight) {
         alert('Bitte Wiederholungen und Gewicht eingeben.');
         return;
@@ -156,7 +246,9 @@
         repetitions: reps,
         weight: weight,
         notes: notes || null,
-        perceived_exertion: normalizedRpe
+        perceived_exertion: normalizedRpe,
+        warmup_activity: warmupSel ? (warmupSel.value || null) : null,
+        warmup_duration: warmupDurEl ? (warmupDurEl.value || null) : null
       };
 
       function startCountdown() {
@@ -199,6 +291,10 @@
           exercise_id: {{ exercise.id }},
           repetitions: reps,
           weight: weight,
+          duration_minutes: null,
+          distance_km: null,
+          warmup_activity: warmupSel ? (warmupSel.value || null) : null,
+          warmup_duration: warmupDurEl ? (warmupDurEl.value || null) : null,
           notes: notes || null,
           perceived_exertion: normalizedRpe,
           timestamp: new Date().toISOString()
@@ -206,5 +302,6 @@
         startCountdown();
       }
     });
+    {% endif %}
   </script>
 {% endblock %}

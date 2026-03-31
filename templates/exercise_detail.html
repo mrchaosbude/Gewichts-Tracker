@@ -14,12 +14,26 @@
         height: 400px;
       }
     }
+    .cardio-badge {
+      display: inline-block;
+      background: #ffc107;
+      color: #212529;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 0.3rem;
+      vertical-align: middle;
+      margin-left: 0.4rem;
+    }
   </style>
 {% endblock %}
 
 {% block content %}
   <div class="page-wrap">
-    <h2 class="page-title text-center">{{ exercise.name }}</h2>
+    <h2 class="page-title text-center">
+      {{ exercise.name }}
+      {% if is_cardio %}<span class="cardio-badge">Ausdauer</span>{% endif %}
+    </h2>
     {% if exercise.description %}
       <p class="text-center text-muted" style="margin-top:-0.5rem; margin-bottom:1rem; font-size:0.9rem;">{{ exercise.description }}</p>
     {% endif %}
@@ -31,8 +45,36 @@
       </p>
     {% endif %}
 
-    {% if summary_metrics.total_sessions %}
-      <!-- Summary Stats 2x2 Grid -->
+    {% if is_cardio %}
+      <!-- Cardio Stats -->
+      {% if cardio_stats.total_sessions %}
+      <div class="section-label">Statistik</div>
+      <div class="stat-row">
+        <div class="stat-box blue">
+          <div class="val">{{ cardio_stats.total_duration }}</div>
+          <div class="lbl">Gesamt Min</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">{{ cardio_stats.total_sessions }} Einheiten</div>
+        </div>
+        <div class="stat-box green">
+          <div class="val">{{ cardio_stats.avg_duration }}</div>
+          <div class="lbl">Ø Min</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">pro Einheit</div>
+        </div>
+        {% if cardio_stats.total_distance %}
+        <div class="stat-box orange">
+          <div class="val">{{ cardio_stats.total_distance }}</div>
+          <div class="lbl">Gesamt km</div>
+          <div style="font-size:0.7rem; color:#6c757d; margin-top:0.25rem;">&nbsp;</div>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+        <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
+      {% endif %}
+
+    {% else %}
+      <!-- Kraft Stats -->
+      {% if summary_metrics.total_sessions %}
       <div class="section-label">Statistik</div>
       <div class="stat-row">
         <div class="stat-box blue">
@@ -68,39 +110,52 @@
           </div>
         </div>
       </div>
-    {% else %}
-      <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
-    {% endif %}
+      {% else %}
+        <div class="alert alert-info">Für diese Übung wurden noch keine Trainingseinheiten erfasst.</div>
+      {% endif %}
 
-    <!-- Chart -->
-    {% if chart_settings.weight or chart_settings.reps or chart_settings.volume or chart_settings.volume_avg or chart_settings.one_rm or chart_settings.one_rm_avg %}
-    <div class="s-card" style="padding:0.75rem;">
-      <div id="chartContainer">
-        <canvas id="progressChart"></canvas>
+      <!-- Chart (nur für Kraftübungen) -->
+      {% if chart_settings.weight or chart_settings.reps or chart_settings.volume or chart_settings.volume_avg or chart_settings.one_rm or chart_settings.one_rm_avg %}
+      <div class="s-card" style="padding:0.75rem;">
+        <div id="chartContainer">
+          <canvas id="progressChart"></canvas>
+        </div>
       </div>
-    </div>
-    {% endif %}
+      {% endif %}
 
-    <!-- Progression Suggestion -->
-    {% if progression %}
-    <div class="alert {% if progression.type == 'increase_weight' %}alert-success{% elif progression.type == 'decrease_weight' %}alert-warning{% else %}alert-info{% endif %}" style="margin-top:0.75rem; border-radius:0.75rem; font-size:0.9rem;">
-      <strong>Progressions-Vorschlag:</strong> {{ progression.message }}
-    </div>
+      <!-- Progression Suggestion -->
+      {% if progression %}
+      <div class="alert {% if progression.type == 'increase_weight' %}alert-success{% elif progression.type == 'decrease_weight' %}alert-warning{% else %}alert-info{% endif %}" style="margin-top:0.75rem; border-radius:0.75rem; font-size:0.9rem;">
+        <strong>Progressions-Vorschlag:</strong> {{ progression.message }}
+      </div>
+      {% endif %}
+
     {% endif %}
 
     <!-- Add Session Button -->
-    <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block" style="border-radius:0.75rem; margin-top:0.75rem;">Neuen Satz hinzufügen</a>
+    <a href="{{ url_for('add_session', exercise_id=exercise.id) }}" class="btn btn-primary btn-block" style="border-radius:0.75rem; margin-top:0.75rem;">
+      {% if is_cardio %}Neue Einheit eintragen{% else %}Neuen Satz hinzufügen{% endif %}
+    </a>
 
     <!-- Last 15 Sessions -->
-    <div class="section-label" style="margin-top:1.25rem;">Letzte 15 Sätze</div>
+    <div class="section-label" style="margin-top:1.25rem;">Letzte 15 Einträge</div>
     <div class="s-card s-card-flush">
       {% for session in sessions %}
         <div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0.85rem; {% if not loop.last %}border-bottom:1px solid #eee;{% endif %}">
           <div style="flex:1; min-width:0;">
             <div style="font-size:0.88rem; font-weight:500;">
-              {{ session.weight }} kg &times; {{ session.repetitions }}
+              {% if is_cardio %}
+                {{ session.duration_minutes }} Min{% if session.distance_km %} &middot; {{ session.distance_km }} km{% endif %}
+              {% else %}
+                {{ session.weight }} kg &times; {{ session.repetitions }}
+              {% endif %}
               <span style="color:#6c757d; font-weight:400; font-size:0.8rem; margin-left:0.4rem;">{{ session.timestamp.strftime('%d.%m.%Y %H:%M') }}</span>
             </div>
+            {% if session.warmup_activity %}
+              <div style="font-size:0.72rem; color:#6c757d; margin-top:0.1rem;">
+                Aufgewärmt: {{ session.warmup_activity }}{% if session.warmup_duration %} ({{ session.warmup_duration }} Min){% endif %}
+              </div>
+            {% endif %}
             {% if session.perceived_exertion is not none or session.notes %}
               <div style="font-size:0.75rem; color:#6c757d; margin-top:0.15rem;">
                 {% if session.perceived_exertion is not none %}RPE {{ session.perceived_exertion }}{% endif %}
@@ -109,7 +164,7 @@
               </div>
             {% endif %}
           </div>
-          <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Satz wirklich löschen?');" style="margin-left:0.5rem; flex-shrink:0;">
+          <form action="{{ url_for('delete_session', session_id=session.id) }}" method="POST" onsubmit="return confirm('Eintrag wirklich löschen?');" style="margin-left:0.5rem; flex-shrink:0;">
             {{ delete_session_form.hidden_tag() }}
             {{ delete_session_form.submit(class="btn btn-danger btn-sm", value="×", style="padding:0.15rem 0.5rem; font-size:0.85rem; border-radius:0.5rem;") }}
           </form>
@@ -134,6 +189,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+  {% if not is_cardio %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     const chartData = {{ chart_data|tojson }};
@@ -266,7 +322,9 @@
         }
       });
     }
-
+  </script>
+  {% endif %}
+  <script>
     history.replaceState({ from: 'plan' }, "", "{{ url_for('training_plan_detail', training_plan_id=user_plan.id) }}");
     history.pushState({ from: 'exercise' }, "", location.pathname + location.search);
     window.addEventListener('popstate', function (e) {
