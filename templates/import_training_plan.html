@@ -8,20 +8,27 @@
 
     <div class="s-card mb-3" style="font-size:0.8rem;">
         <div class="section-label mb-2">Format-Beispiel</div>
-        <pre class="mb-0" style="white-space:pre-wrap; background:rgba(0,0,0,0.04); padding:0.5rem; border-radius:0.4rem; font-size:0.75rem;"># Plantitel
+        <pre class="mb-0" style="white-space:pre-wrap; background:var(--pre-bg, rgba(0,0,0,0.04)); padding:0.5rem; border-radius:0.4rem; font-size:0.75rem;"># Plantitel
 
 Optionale Planbeschreibung (max. 300 Zeichen)
 
 ---Push
 ## Bankdrücken
+Muskelgruppe: Brust
+YouTube: https://youtube.com/watch?v=abc
 Klassische Brustübung mit der Langhantel.
 
 ## Schulterdrücken
+Muskelgruppe: Schultern
 
----Beine
-## Kniebeuge
-Grundübung für die Beine.</pre>
-        <div class="text-muted mt-1" style="font-size:0.72rem;"><code>---Label</code> = Trenner/Abschnitt</div>
+---Cardio
+## Laufen
+Typ: ausdauer
+30 Minuten lockeres Joggen.</pre>
+        <div class="text-muted mt-1" style="font-size:0.72rem;">
+            <code>---Label</code> = Trenner/Abschnitt<br>
+            <code>Muskelgruppe:</code> / <code>Typ:</code> (kraft/ausdauer) / <code>YouTube:</code> = optional pro Übung
+        </div>
     </div>
 
     <div class="s-card">
@@ -66,6 +73,13 @@ Grundübung für die Beine.</pre>
             {% else %}
             <div style="padding:0.4rem 0; border-top:1px solid rgba(0,0,0,0.06); font-size:0.85rem;">
                 <strong>{{ ex.name }}</strong>
+                {% if ex.muscle_group or ex.exercise_type or ex.video_url %}
+                <div style="font-size:0.72rem; color:#6c757d; margin-top:0.1rem;">
+                    {% if ex.muscle_group %}<span class="badge badge-secondary" style="font-weight:500;">{{ ex.muscle_group }}</span> {% endif %}
+                    {% if ex.exercise_type %}<span class="badge badge-info" style="font-weight:500;">{{ ex.exercise_type }}</span> {% endif %}
+                    {% if ex.video_url %}<a href="{{ ex.video_url }}" target="_blank" style="font-size:0.72rem;">YouTube</a>{% endif %}
+                </div>
+                {% endif %}
                 {% if ex.description %}
                     <div class="text-muted" style="white-space:pre-line; font-size:0.8rem;">{{ ex.description }}</div>
                 {% endif %}

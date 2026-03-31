@@ -172,6 +172,78 @@ Has description
         assert result['exercises'][0]['description'] == ''
         assert result['exercises'][1]['description'] == 'Has description'
 
+    def test_muscle_group_metadata(self):
+        """Test parsing Muskelgruppe metadata from exercise."""
+        content = """# Plan
+
+## Bench Press
+Muskelgruppe: Brust
+Chest exercise.
+"""
+        result = parse_training_plan_markdown(content)
+        assert result['success'] is True
+        assert result['exercises'][0]['muscle_group'] == 'Brust'
+        assert result['exercises'][0]['description'] == 'Chest exercise.'
+
+    def test_exercise_type_metadata(self):
+        """Test parsing Typ (exercise_type) metadata."""
+        content = """# Plan
+
+## Laufen
+Typ: ausdauer
+30 Minuten joggen.
+"""
+        result = parse_training_plan_markdown(content)
+        assert result['success'] is True
+        assert result['exercises'][0]['exercise_type'] == 'ausdauer'
+        assert result['exercises'][0]['description'] == '30 Minuten joggen.'
+
+    def test_youtube_metadata(self):
+        """Test parsing YouTube URL metadata."""
+        content = """# Plan
+
+## Squat
+YouTube: https://youtube.com/watch?v=abc123
+Heavy squats.
+"""
+        result = parse_training_plan_markdown(content)
+        assert result['success'] is True
+        assert result['exercises'][0]['video_url'] == 'https://youtube.com/watch?v=abc123'
+        assert result['exercises'][0]['description'] == 'Heavy squats.'
+
+    def test_all_metadata_combined(self):
+        """Test parsing all metadata fields together."""
+        content = """# Plan
+
+## Bankdrücken
+Muskelgruppe: Brust
+Typ: kraft
+YouTube: https://youtube.com/watch?v=xyz
+Klassische Brustübung.
+"""
+        result = parse_training_plan_markdown(content)
+        assert result['success'] is True
+        ex = result['exercises'][0]
+        assert ex['muscle_group'] == 'Brust'
+        assert ex['exercise_type'] == 'kraft'
+        assert ex['video_url'] == 'https://youtube.com/watch?v=xyz'
+        assert ex['description'] == 'Klassische Brustübung.'
+
+    def test_no_metadata_defaults_empty(self):
+        """Test that exercises without metadata have empty metadata fields."""
+        content = """# Plan
+
+## Simple Exercise
+Just a description.
+"""
+        result = parse_training_plan_markdown(content)
+        assert result['success'] is True
+        ex = result['exercises'][0]
+        assert ex['muscle_group'] == ''
+        assert ex['exercise_type'] == ''
+        assert ex['video_url'] == ''
+        assert ex['description'] == 'Just a description.'
+
 
 @pytest.fixture
 def client():
