@@ -3,36 +3,36 @@
 {% block title %}Admin – Template Trainingspläne{% endblock %}
 
 {% block content %}
-  <div class="page-wrap" style="max-width:720px;">
+  <div class="page-wrap page-wrap-narrow">
     <h2 class="page-title">Template Pläne</h2>
 
-    <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+    <div class="flex-gap mb-3">
       <a href="{{ url_for('create_template_plan') }}" class="btn btn-success btn-block btn-sm">Neu erstellen</a>
       <a href="{{ url_for('import_template_plan') }}" class="btn btn-outline-success btn-block btn-sm">Markdown Import</a>
     </div>
 
     <div class="section-label">Vorlagen ({{ templates|length }})</div>
     {% for tpl in templates %}
-    <div class="s-card" style="font-size:0.85rem;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.3rem;">
+    <div class="s-card admin-card">
+      <div class="d-flex align-items-center justify-content-between mb-1">
         <strong>{{ tpl.title }}</strong>
         <span class="badge {% if tpl.is_visible %}badge-success{% else %}badge-secondary{% endif %}">{{ 'Sichtbar' if tpl.is_visible else 'Versteckt' }}</span>
       </div>
-      {% if tpl.description %}<div class="text-muted mb-2" style="font-size:0.8rem;">{{ tpl.description }}</div>{% endif %}
-      <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
-        <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">+ Übung</a>
-        <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-outline-secondary btn-sm py-0" style="font-size:0.7rem;">Bearbeiten</a>
-        <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" style="display:inline;">
+      {% if tpl.description %}<div class="text-muted mb-2 fs-sm">{{ tpl.description }}</div>{% endif %}
+      <div class="flex-actions">
+        <a href="{{ url_for('add_exercise_to_template', template_plan_id=tpl.id) }}" class="btn btn-outline-primary btn-sm py-0 btn-action-xs">+ Übung</a>
+        <a href="{{ url_for('edit_template_plan', template_plan_id=tpl.id) }}" class="btn btn-outline-secondary btn-sm py-0 btn-action-xs">Bearbeiten</a>
+        <form action="{{ url_for('toggle_template_visibility', template_plan_id=tpl.id) }}" method="POST" class="form-inline-action">
           {{ toggle_form.hidden_tag() }}
           {% if tpl.is_visible %}
-            {{ toggle_form.submit(class="btn btn-outline-warning btn-sm py-0", value='Verstecken', style="font-size:0.7rem;") }}
+            {{ toggle_form.submit(class="btn btn-outline-warning btn-sm py-0 btn-action-xs", value='Verstecken') }}
           {% else %}
-            {{ toggle_form.submit(class="btn btn-outline-success btn-sm py-0", value='Zeigen', style="font-size:0.7rem;") }}
+            {{ toggle_form.submit(class="btn btn-outline-success btn-sm py-0 btn-action-xs", value='Zeigen') }}
           {% endif %}
         </form>
-        <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Template wirklich löschen?');">
+        <form action="{{ url_for('delete_template_plan', template_plan_id=tpl.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Template wirklich löschen?');">
           {{ delete_tpl_form.hidden_tag() }}
-          {{ delete_tpl_form.submit(class="btn btn-outline-danger btn-sm py-0", value='Löschen', style="font-size:0.7rem;") }}
+          {{ delete_tpl_form.submit(class="btn btn-outline-danger btn-sm py-0 btn-action-xs", value='Löschen') }}
         </form>
       </div>
     </div>

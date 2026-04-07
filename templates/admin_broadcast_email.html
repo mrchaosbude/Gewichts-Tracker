@@ -7,7 +7,7 @@
     <h2 class="page-title">E-Mail an alle Benutzer</h2>
 
     {% if not smtp_configured %}
-    <div class="alert alert-warning" style="font-size:0.88rem;">
+    <div class="alert alert-warning fs-base">
       SMTP ist nicht konfiguriert. Bitte zuerst unter <a href="{{ url_for('admin_settings') }}">Einstellungen</a> die SMTP-Daten hinterlegen.
     </div>
     {% endif %}
@@ -15,11 +15,11 @@
     <div class="s-card">
       <form method="POST">
         {{ form.hidden_tag() }}
-        <div class="form-group" style="margin-bottom:1rem;">
+        <div class="form-group mb-3">
           {{ form.subject.label(class="small font-weight-bold") }}
           {{ form.subject(class="form-control", placeholder="Betreff der E-Mail") }}
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
+        <div class="form-group mb-3">
           {{ form.message.label(class="small font-weight-bold") }}
           {{ form.message(class="form-control", rows="8", placeholder="Nachricht an alle Benutzer...") }}
           <small class="text-muted">HTML-Formatierung wird unterstützt (z.B. &lt;b&gt;fett&lt;/b&gt;, &lt;a href=&quot;...&quot;&gt;Link&lt;/a&gt;)</small>

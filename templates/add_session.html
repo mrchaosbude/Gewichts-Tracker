@@ -37,37 +37,27 @@
       {% if is_cardio %}<span class="cardio-badge">Ausdauer</span>{% endif %}
     </h2>
     {% if exercise.description %}
-      <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">{{ exercise.description }}</p>
+      <p class="text-muted subtitle">{{ exercise.description }}</p>
     {% endif %}
 
     <div class="s-card">
       <form method="POST" id="sessionForm">
         {{ form.hidden_tag() }}
 
-        {% if not is_cardio %}
-        <!-- Aufwärmung (nur bei Kraftübungen) -->
-        <div class="s-card warmup-card mb-2 p-2" style="background:transparent;">
-          <div class="section-label mb-2" style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; color:#6c757d;">Aufwärmen (optional)</div>
-          <div class="form-row">
-            <div class="form-group col-8 mb-1">
-              <label class="small font-weight-bold" for="warmup_activity">Aktivität</label>
-              <select name="warmup_activity" id="warmup_activity" class="form-control form-control-sm">
-                <option value="">-- Kein Aufwärmen --</option>
-                {% for c in cardio_exercises %}
-                  <option value="{{ c }}" {% if form.warmup_activity.data == c %}selected{% endif %}>{{ c }}</option>
-                {% endfor %}
-                {% for ex in user_cardio_exercises %}
-                  {% if ex.name not in cardio_exercises %}
-                    <option value="{{ ex.name }}" {% if form.warmup_activity.data == ex.name %}selected{% endif %}>{{ ex.name }}</option>
-                  {% endif %}
-                {% endfor %}
-              </select>
-            </div>
-            <div class="form-group col-4 mb-1">
-              <label class="small font-weight-bold" for="warmup_duration">Min</label>
-              {{ form.warmup_duration(class="form-control form-control-sm", id="warmup_duration", placeholder="Min") }}
-            </div>
-          </div>
+        {% if is_cardio %}
+        <!-- Aktivitäts-Auswahl (pro Session wählbar, letzte Wahl vorausgewählt) -->
+        <div class="form-group mb-2">
+          <label class="small font-weight-bold" for="warmup_activity">Aktivität</label>
+          <select name="warmup_activity" id="warmup_activity" class="form-control">
+            {% for c in cardio_exercises %}
+              <option value="{{ c }}" {% if form.warmup_activity.data == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+            {% for ex in user_cardio_exercises %}
+              {% if ex.name not in cardio_exercises %}
+                <option value="{{ ex.name }}" {% if form.warmup_activity.data == ex.name %}selected{% endif %}>{{ ex.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
         </div>
         {% endif %}
 
@@ -78,7 +68,7 @@
             {{ form.duration_minutes.label(class="small font-weight-bold") }}
             {{ form.duration_minutes(class="form-control", placeholder="Min") }}
             {% if form.duration_minutes.errors %}
-              <div class="text-danger" style="font-size:0.8rem;">{{ form.duration_minutes.errors[0] }}</div>
+              <div class="text-danger form-field-error">{{ form.duration_minutes.errors[0] }}</div>
             {% endif %}
           </div>
           <div class="form-group col-6">
@@ -93,14 +83,14 @@
             {{ form.weight.label(class="small font-weight-bold") }}
             {{ form.weight(class="form-control", pattern="\\d*", placeholder="kg") }}
             {% if form.weight.errors %}
-              <div class="text-danger" style="font-size:0.8rem;">{{ form.weight.errors[0] }}</div>
+              <div class="text-danger form-field-error">{{ form.weight.errors[0] }}</div>
             {% endif %}
           </div>
           <div class="form-group col-6">
             {{ form.repetitions.label(class="small font-weight-bold") }}
             {{ form.repetitions(class="form-control", pattern="\\d*", placeholder="Wdh") }}
             {% if form.repetitions.errors %}
-              <div class="text-danger" style="font-size:0.8rem;">{{ form.repetitions.errors[0] }}</div>
+              <div class="text-danger form-field-error">{{ form.repetitions.errors[0] }}</div>
             {% endif %}
           </div>
         </div>
@@ -151,7 +141,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="/static/js/main.js"></script>
   <script>
     {% if not is_cardio %}
     const restInput = document.getElementById('restTime');
@@ -176,13 +165,13 @@
           distance_km: document.getElementById('distance_km').value || null,
           repetitions: null,
           weight: null,
+          warmup_activity: warmupSel ? (warmupSel.value || null) : null,
+          warmup_duration: warmupDurEl ? (warmupDurEl.value || null) : null,
           {% else %}
           repetitions: document.getElementById('repetitions').value,
           weight: document.getElementById('weight').value,
           duration_minutes: null,
           distance_km: null,
-          warmup_activity: warmupSel ? (warmupSel.value || null) : null,
-          warmup_duration: warmupDurEl ? (warmupDurEl.value || null) : null,
           {% endif %}
           perceived_exertion: normalizedRpe,
           notes: document.getElementById('notes').value || null,
@@ -279,7 +268,10 @@
       if (navigator.onLine) {
         fetch('/api/exercises/{{ exercise.id }}/sessions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: window.getRequestHeaders ? window.getRequestHeaders('application/json') : {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
           body: JSON.stringify(sessionData)
         })
           .then(startCountdown)

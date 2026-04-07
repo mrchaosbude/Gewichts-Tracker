@@ -47,8 +47,8 @@
       <form method="POST">
         {{ form.hidden_tag() }}
 
-        <p class="section-label" style="margin-top:0">Allgemein</p>
-        <div class="form-group" style="margin-bottom:1.25rem;">
+        <p class="section-label mt-0">Allgemein</p>
+        <div class="form-group mb-3">
           {{ form.app_name.label(class="small font-weight-bold") }}
           {{ form.app_name(class="form-control", placeholder="z.B. Gewichts-Tracker, Mein Gym...") }}
         </div>
@@ -99,23 +99,23 @@
 
         <div id="smtp-settings" style="display:none;">
           <p class="section-label">SMTP-Einstellungen</p>
-          <div class="form-group" style="margin-bottom:0.75rem;">
+          <div class="form-group mb-2">
             {{ form.smtp_server.label(class="small font-weight-bold") }}
             {{ form.smtp_server(class="form-control", placeholder="z.B. smtp.gmail.com") }}
           </div>
-          <div class="form-group" style="margin-bottom:0.75rem;">
+          <div class="form-group mb-2">
             {{ form.smtp_port.label(class="small font-weight-bold") }}
             {{ form.smtp_port(class="form-control", placeholder="587") }}
           </div>
-          <div class="form-group" style="margin-bottom:0.75rem;">
+          <div class="form-group mb-2">
             {{ form.smtp_username.label(class="small font-weight-bold") }}
             {{ form.smtp_username(class="form-control", placeholder="SMTP-Benutzer") }}
           </div>
-          <div class="form-group" style="margin-bottom:0.75rem;">
+          <div class="form-group mb-2">
             {{ form.smtp_password.label(class="small font-weight-bold") }}
             {{ form.smtp_password(class="form-control", placeholder="(gespeichert)" if settings.smtp_password else "SMTP-Passwort") }}
           </div>
-          <div class="form-group" style="margin-bottom:0.75rem;">
+          <div class="form-group mb-2">
             {{ form.smtp_sender_email.label(class="small font-weight-bold") }}
             {{ form.smtp_sender_email(class="form-control", placeholder="noreply@example.com") }}
           </div>
@@ -130,9 +130,9 @@
         {{ form.submit(class="btn btn-primary btn-block") }}
       </form>
 
-      <div id="test-email-section" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid #eee;">
+      <div id="test-email-section" class="login-divider" style="display:none;">
         <form method="POST" action="{{ url_for('admin_test_email') }}">
-          <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
+          {{ form.hidden_tag() }}
           <button type="submit" class="btn btn-outline-secondary btn-block btn-sm">Test-E-Mail senden</button>
         </form>
       </div>

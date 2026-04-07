@@ -43,13 +43,13 @@
     <div class="stat-row">
       <div class="stat-box">
         <div class="lbl">Letzte Woche</div>
-        <div class="val" style="font-size:1.2rem;">{{ last_week_sets }}</div>
+        <div class="val fs-lg">{{ last_week_sets }}</div>
         <div class="lbl">Sätze</div>
         <div class="small text-muted">{{ last_week_volume }} kg</div>
       </div>
       <div class="stat-box">
         <div class="lbl">Diese Woche</div>
-        <div class="val" style="font-size:1.2rem;">{{ this_week_sets }}</div>
+        <div class="val fs-lg">{{ this_week_sets }}</div>
         <div class="lbl">Sätze</div>
         <div class="small text-muted">{{ this_week_volume }} kg</div>
       </div>
@@ -67,7 +67,7 @@
     {% if exercise_comparison %}
     <div class="s-card s-card-flush">
       <div class="table-responsive">
-        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+        <table class="table table-sm mb-0 table-compact">
           <thead>
             <tr>
               <th>Übung</th>
@@ -107,7 +107,7 @@
           <canvas id="muscleChart"></canvas>
         </div>
       {% else %}
-        <p class="text-muted mb-0" style="font-size:0.9rem;">Weise deinen Übungen Muskelgruppen zu, um die Verteilung zu sehen.</p>
+        <p class="text-muted mb-0 fs-md">Weise deinen Übungen Muskelgruppen zu, um die Verteilung zu sehen.</p>
       {% endif %}
     </div>
 
@@ -123,7 +123,7 @@
 
     {% if cardio_total_sessions > 0 %}
     <div class="stat-section-divider">
-      <div class="section-label"><span class="cardio-badge" style="font-size:0.8rem;">Ausdauer</span> Übersicht</div>
+      <div class="section-label"><span class="cardio-badge fs-sm">Ausdauer</span> Übersicht</div>
     </div>
 
     <!-- Ausdauer Gesamt -->
@@ -153,13 +153,13 @@
     <div class="stat-row">
       <div class="stat-box">
         <div class="lbl">Letzte Woche</div>
-        <div class="val" style="font-size:1.2rem;">{{ cardio_lw_sessions }}</div>
+        <div class="val fs-lg">{{ cardio_lw_sessions }}</div>
         <div class="lbl">Einheiten</div>
         <div class="small text-muted">{{ cardio_lw_duration }} Min{% if cardio_lw_distance %} · {{ cardio_lw_distance }} km{% endif %}</div>
       </div>
       <div class="stat-box">
         <div class="lbl">Diese Woche</div>
-        <div class="val" style="font-size:1.2rem;">{{ cardio_tw_sessions }}</div>
+        <div class="val fs-lg">{{ cardio_tw_sessions }}</div>
         <div class="lbl">Einheiten</div>
         <div class="small text-muted">{{ cardio_tw_duration }} Min{% if cardio_tw_distance %} · {{ cardio_tw_distance }} km{% endif %}</div>
       </div>
@@ -180,7 +180,7 @@
     <div class="section-label mt-3">Ausdauer pro Aktivität</div>
     <div class="s-card s-card-flush">
       <div class="table-responsive">
-        <table class="table table-sm mb-0" style="font-size:0.85rem;">
+        <table class="table table-sm mb-0 table-compact">
           <thead>
             <tr>
               <th>Aktivität</th>

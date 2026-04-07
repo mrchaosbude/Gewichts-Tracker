@@ -13,10 +13,12 @@ from flask import (
     make_response,
 )
 import markdown
-import bleach
+import nh3
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import joinedload
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm, RecaptchaField
+from flask_wtf.csrf import CSRFProtect
 from wtforms import StringField, PasswordField, SubmitField, IntegerField, BooleanField, TextAreaField, SelectField, DecimalField
 from wtforms.validators import DataRequired, InputRequired, Length, EqualTo, ValidationError, Optional, NumberRange
 from urllib.parse import urlparse
@@ -30,12 +32,22 @@ import os
 import uuid
 import secrets
 import smtplib
+import hashlib
+import base64
+from cryptography.fernet import Fernet, InvalidToken
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import calendar as cal_module
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+def _utcnow():
+    """Current UTC time as naive datetime (compatible with SQLite which strips tzinfo)."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dein_geheimer_schluessel'  # Bitte anpassen!
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('GEWICHTS_TRACKER_DATABASE_URI', 'sqlite:///fitness.db')
 
 # reCAPTCHA-Konfiguration (ersetze die Schlüssel durch deine echten Werte)
@@ -45,6 +57,28 @@ app.config['RECAPTCHA_PRIVATE_KEY'] = 'dein_recaptcha_private_key'
 app.config['RECAPTCHA_ENABLED'] = False
 
 db = SQLAlchemy(app)
+csrf = CSRFProtect(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
+
+
+def _get_fernet():
+    key = hashlib.sha256(app.config['SECRET_KEY'].encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def encrypt_value(plaintext):
+    if not plaintext:
+        return None
+    return _get_fernet().encrypt(plaintext.encode()).decode()
+
+
+def decrypt_value(encrypted):
+    if not encrypted:
+        return None
+    try:
+        return _get_fernet().decrypt(encrypted.encode()).decode()
+    except (InvalidToken, Exception):
+        return encrypted
 
 
 def _ensure_database_setup_once() -> None:
@@ -79,7 +113,7 @@ class User(UserMixin, db.Model):
     email_confirmed = db.Column(db.Boolean, default=False)
     email_token = db.Column(db.String(100), nullable=True)
     email_token_created = db.Column(db.DateTime, nullable=True)
-    registration_date = db.Column(db.DateTime, default=datetime.datetime.now)
+    registration_date = db.Column(db.DateTime, default=lambda: _utcnow())
     last_login = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
     is_trainer = db.Column(db.Boolean, default=False)
@@ -121,7 +155,7 @@ class Exercise(db.Model):
     muscle_group = db.Column(db.String(50), nullable=True)
     is_separator = db.Column(db.Boolean, default=False)
     exercise_type = db.Column(db.String(20), nullable=True, default='kraft')  # 'kraft' oder 'ausdauer'
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
     sessions = db.relationship('ExerciseSession', backref='exercise', lazy=True, cascade="all, delete-orphan")
     training_plans = db.relationship('TrainingPlan', secondary=plan_exercises, back_populates='exercises')
 
@@ -129,15 +163,16 @@ class ExerciseSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     repetitions = db.Column(db.Integer, nullable=True)
-    weight = db.Column(db.Integer, nullable=True)  # Gewicht als Integer (nur Kraft)
-    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    weight = db.Column(db.Float, nullable=True)
+    timestamp = db.Column(db.DateTime, default=lambda: _utcnow(), index=True)
     notes = db.Column(db.Text)
     perceived_exertion = db.Column(db.Integer)
     duration_minutes = db.Column(db.Integer, nullable=True)   # Ausdauer: Dauer in Minuten
     distance_km = db.Column(db.Float, nullable=True)           # Ausdauer: Distanz in km
     warmup_activity = db.Column(db.String(100), nullable=True) # Aufwärmung: Aktivität
     warmup_duration = db.Column(db.Integer, nullable=True)     # Aufwärmung: Dauer in Minuten
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
+    client_uuid = db.Column(db.String(36), nullable=True, unique=True)
 
 # Modelle für Template Trainingspläne
 class TemplateTrainingPlan(db.Model):
@@ -172,10 +207,11 @@ class FooterLink(db.Model):
 # Körpergewicht-Tracking
 class BodyWeight(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     weight = db.Column(db.Float, nullable=False)  # Gewicht in kg
-    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    timestamp = db.Column(db.DateTime, default=lambda: _utcnow())
     notes = db.Column(db.Text)  # Optionale Notizen
+    client_uuid = db.Column(db.String(36), nullable=True, unique=True)
 
 
 class AppSettings(db.Model):
@@ -191,7 +227,7 @@ class AppSettings(db.Model):
     smtp_server = db.Column(db.String(150), nullable=True)
     smtp_port = db.Column(db.Integer, default=587)
     smtp_username = db.Column(db.String(150), nullable=True)
-    smtp_password = db.Column(db.String(150), nullable=True)
+    smtp_password = db.Column(db.String(500), nullable=True)
     smtp_use_tls = db.Column(db.Boolean, default=True)
     smtp_sender_email = db.Column(db.String(150), nullable=True)
 
@@ -203,6 +239,100 @@ def get_app_settings():
         db.session.add(settings)
         db.session.commit()
     return settings
+
+
+def _get_json_payload():
+    data = request.get_json(silent=True)
+    if data is None:
+        return None, jsonify({'error': 'valid JSON body required'}), 400
+    if not isinstance(data, dict):
+        return None, jsonify({'error': 'JSON body must be an object'}), 400
+    return data, None, None
+
+
+def _parse_int_field(value, field_name, *, minimum=None, maximum=None):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field_name} must be an integer')
+    if minimum is not None and parsed < minimum:
+        raise ValueError(f'{field_name} must be at least {minimum}')
+    if maximum is not None and parsed > maximum:
+        raise ValueError(f'{field_name} must be at most {maximum}')
+    return parsed
+
+
+def _parse_float_field(value, field_name, *, minimum=None, maximum=None):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field_name} must be a number')
+    if minimum is not None and parsed < minimum:
+        raise ValueError(f'{field_name} must be at least {minimum}')
+    if maximum is not None and parsed > maximum:
+        raise ValueError(f'{field_name} must be at most {maximum}')
+    return parsed
+
+
+def _parse_optional_body_weight(value):
+    cleaned = (value or '').strip()
+    if not cleaned:
+        return None
+    return _parse_float_field(cleaned, 'body_weight', minimum=20, maximum=500)
+
+
+def _parse_calendar_month_args():
+    year = request.args.get('year', _utcnow().year, type=int)
+    month = request.args.get('month', _utcnow().month, type=int)
+    if year is None or month is None:
+        raise ValueError('year and month must be integers')
+    if month < 1 or month > 12:
+        raise ValueError('month must be between 1 and 12')
+    return year, month
+
+
+def _is_trusted_state_changing_request():
+    if app.testing or not app.config.get('WTF_CSRF_ENABLED', True):
+        return True
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+
+    origin = request.headers.get('Origin')
+    referer = request.headers.get('Referer')
+    expected = urlparse(request.host_url)
+
+    def _matches(url_value: str) -> bool:
+        parsed = urlparse(url_value)
+        return parsed.scheme == expected.scheme and parsed.netloc == expected.netloc
+
+    if origin:
+        return _matches(origin)
+    if referer:
+        return _matches(referer)
+    return False
+
+
+@app.before_request
+def protect_session_api_requests():
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return None
+    if request.blueprint != 'api' and request.endpoint not in {'sync', 'sync_weights'}:
+        return None
+    if _is_trusted_state_changing_request():
+        return None
+    return jsonify({'error': 'trusted same-origin request required'}), 403
+
+
+def _smtp_connect(settings):
+    """Create and return an authenticated SMTP connection using app settings."""
+    if settings.smtp_use_tls:
+        server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
+        server.starttls()
+    else:
+        server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
+    if settings.smtp_username and settings.smtp_password:
+        server.login(settings.smtp_username, decrypt_value(settings.smtp_password))
+    return server
 
 
 def send_verification_email(user):
@@ -244,13 +374,7 @@ def send_verification_email(user):
     msg.attach(MIMEText(html_body, 'html'))
 
     try:
-        if settings.smtp_use_tls:
-            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
-            server.starttls()
-        else:
-            server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
-        if settings.smtp_username and settings.smtp_password:
-            server.login(settings.smtp_username, settings.smtp_password)
+        server = _smtp_connect(settings)
         server.sendmail(settings.smtp_sender_email, user.email, msg.as_string())
         server.quit()
         return True
@@ -264,7 +388,7 @@ _last_cleanup = None
 def cleanup_unverified_accounts():
     """Delete unverified accounts older than 7 days. Runs at most once per hour."""
     global _last_cleanup
-    now = datetime.datetime.now()
+    now = _utcnow()
     if _last_cleanup and (now - _last_cleanup).total_seconds() < 3600:
         return
     _last_cleanup = now
@@ -286,9 +410,15 @@ def cleanup_unverified_accounts():
         db.session.commit()
 
 
-@app.before_request
-def before_request_cleanup():
-    cleanup_unverified_accounts()
+## cleanup_unverified_accounts is called from login() and register(), not before_request
+
+
+@app.after_request
+def set_cache_headers(response):
+    """Prevent SW from caching authenticated HTML pages."""
+    if current_user.is_authenticated and response.content_type and 'text/html' in response.content_type:
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 # Geplante Trainingstage
@@ -306,7 +436,7 @@ class ProgressPhoto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     filename = db.Column(db.String(300), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    timestamp = db.Column(db.DateTime, default=lambda: _utcnow())
     notes = db.Column(db.Text)
     body_weight = db.Column(db.Float, nullable=True)
 
@@ -337,7 +467,7 @@ def inject_footer_pages():
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # ----------------------------------------------------
 # Decorators
@@ -346,7 +476,7 @@ def admin_required(f):
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not current_user.is_admin:
+        if not current_user.is_authenticated or not current_user.is_admin:
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
@@ -355,7 +485,7 @@ def trainer_or_admin_required(f):
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not (current_user.is_admin or current_user.is_trainer):
+        if not current_user.is_authenticated or not (current_user.is_admin or current_user.is_trainer):
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
@@ -409,7 +539,7 @@ class ExerciseTemplateForm(FlaskForm):
 
 class ExerciseSessionForm(FlaskForm):
     repetitions = IntegerField('Wiederholungen', validators=[Optional()], render_kw={"onfocus": "this.select()"})
-    weight = IntegerField('Gewicht (kg)', validators=[Optional()], render_kw={"step": "1", "onfocus": "this.select()"})
+    weight = DecimalField('Gewicht (kg)', validators=[Optional()], places=1, render_kw={"step": "0.5", "onfocus": "this.select()"})
     duration_minutes = IntegerField('Dauer (Minuten)', validators=[Optional()], render_kw={"onfocus": "this.select()"})
     distance_km = DecimalField('Distanz (km, optional)', validators=[Optional()], places=2, render_kw={"onfocus": "this.select()", "step": "0.1"})
     warmup_activity = StringField('Aufwärm-Aktivität', validators=[Optional()])
@@ -521,7 +651,7 @@ class AppSettingsForm(FlaskForm):
 
 
 class BodyWeightForm(FlaskForm):
-    weight = IntegerField('Gewicht (kg)', validators=[InputRequired(), NumberRange(min=20, max=500)], render_kw={"step": "0.1", "onfocus": "this.select()"})
+    weight = DecimalField('Gewicht (kg)', validators=[InputRequired(), NumberRange(min=20, max=500)], places=1, render_kw={"step": "0.1", "onfocus": "this.select()"})
     notes = TextAreaField('Notizen (optional)', render_kw={"rows": 2})
     submit = SubmitField('Speichern')
 
@@ -707,27 +837,35 @@ def _moving_average(values, window):
     return averaged
 
 
+def _get_trained_weeks(user_id, num_weeks=52):
+    """Return a set of week offsets (0=current, 1=last week, ...) that had training.
+    Uses a single DB query instead of one per week."""
+    today = _utcnow().date()
+    monday = today - datetime.timedelta(days=today.weekday())
+    earliest = datetime.datetime.combine(monday - datetime.timedelta(weeks=num_weeks - 1), datetime.time.min)
+    timestamps = (
+        db.session.query(ExerciseSession.timestamp)
+        .filter(
+            ExerciseSession.user_id == user_id,
+            ExerciseSession.timestamp >= earliest,
+        )
+        .all()
+    )
+    trained_weeks = set()
+    for (ts,) in timestamps:
+        week_offset = (monday - ts.date()).days // 7
+        if 0 <= week_offset < num_weeks:
+            trained_weeks.add(week_offset)
+    return trained_weeks
+
+
 def check_deload_reminder(user_id, threshold_weeks=6):
     """Return (should_deload, consecutive_weeks) if the user has trained
     for *threshold_weeks* consecutive weeks without a break."""
-    today = datetime.datetime.now().date()
-    monday = today - datetime.timedelta(days=today.weekday())
-
-    # Check the last 12 weeks for consecutive training
+    trained_weeks = _get_trained_weeks(user_id, num_weeks=12)
     consecutive = 0
     for i in range(12):
-        week_start = monday - datetime.timedelta(weeks=i)
-        week_end = week_start + datetime.timedelta(days=7)
-        count = (
-            ExerciseSession.query
-            .filter(
-                ExerciseSession.user_id == user_id,
-                ExerciseSession.timestamp >= datetime.datetime.combine(week_start, datetime.time.min),
-                ExerciseSession.timestamp < datetime.datetime.combine(week_end, datetime.time.min),
-            )
-            .count()
-        )
-        if count > 0:
+        if i in trained_weeks:
             consecutive += 1
         else:
             break
@@ -786,8 +924,8 @@ def calculate_exercise_statistics(sessions, moving_window=5):
     for session in sorted_sessions:
         chart_data['labels'].append(session.timestamp.strftime('%d.%m.%Y %H:%M'))
         chart_data['iso_timestamps'].append(session.timestamp.isoformat())
-        chart_data['weights'].append(session.weight)
-        chart_data['repetitions'].append(session.repetitions)
+        chart_data['weights'].append(session.weight or 0)
+        chart_data['repetitions'].append(session.repetitions or 0)
         chart_data['notes'].append(session.notes or '')
         chart_data['perceived_exertion'].append(session.perceived_exertion)
         chart_data['volume'].append(_session_volume(session))
@@ -903,6 +1041,8 @@ def check_new_personal_records(exercise_id, user_id, new_weight, new_reps):
     if not previous_sessions:
         return []
     records = []
+    new_weight = float(new_weight)
+    new_reps = float(new_reps)
     max_weight = max(s.weight for s in previous_sessions)
     if new_weight > max_weight:
         records.append(f'Neuer Gewichtsrekord: {new_weight} kg! (vorher: {max_weight} kg)')
@@ -969,7 +1109,9 @@ def index():
     return render_template('index.html')
 
 @app.route('/register', methods=['GET','POST'])
+@limiter.limit("5 per minute")
 def register():
+    cleanup_unverified_accounts()
     settings = get_app_settings()
     email_required = settings.require_email_verification
     form = RegistrationForm()
@@ -987,7 +1129,7 @@ def register():
             new_user.email = form.email.data
             new_user.email_confirmed = False
             new_user.email_token = secrets.token_urlsafe(32)
-            new_user.email_token_created = datetime.datetime.now()
+            new_user.email_token_created = _utcnow()
             db.session.add(new_user)
             db.session.commit()
             if send_verification_email(new_user):
@@ -1006,7 +1148,9 @@ def register():
     return render_template('register.html', form=form, email_required=email_required)
 
 @app.route('/login', methods=['GET','POST'])
+@limiter.limit("10 per minute")
 def login():
+    cleanup_unverified_accounts()
     form = LoginForm()
     show_resend = False
     if form.validate_on_submit():
@@ -1018,7 +1162,7 @@ def login():
                 show_resend = True
             else:
                 login_user(user, remember=form.remember.data)
-                user.last_login = datetime.datetime.now()
+                user.last_login = _utcnow()
                 db.session.commit()
                 flash('Erfolgreich eingeloggt!', 'success')
                 return redirect(url_for('dashboard'))
@@ -1033,7 +1177,9 @@ def login():
 def logout():
     logout_user()
     flash('Ausgeloggt.', 'info')
-    return redirect(url_for('login'))
+    resp = make_response(redirect(url_for('login')))
+    resp.set_cookie('sw_clear_cache', '1', max_age=10)
+    return resp
 
 
 @app.route('/confirm/<token>')
@@ -1042,6 +1188,12 @@ def confirm_email(token):
     if not user:
         flash('Ungültiger oder abgelaufener Bestätigungslink.', 'danger')
         return redirect(url_for('login'))
+    # Token läuft nach 24 Stunden ab
+    if user.email_token_created:
+        age = (_utcnow() - user.email_token_created).total_seconds()
+        if age > 86400:  # 24 Stunden
+            flash('Der Bestätigungslink ist abgelaufen. Bitte fordere einen neuen an.', 'danger')
+            return redirect(url_for('login'))
     user.email_confirmed = True
     user.email_token = None
     user.email_token_created = None
@@ -1057,7 +1209,7 @@ def resend_confirmation():
     if not user or user.email_confirmed or not user.email:
         flash('Bestätigungslink konnte nicht erneut gesendet werden.', 'danger')
         return redirect(url_for('login'))
-    now = datetime.datetime.now()
+    now = _utcnow()
     if user.email_token_created and (now - user.email_token_created).total_seconds() < 300:
         flash('Bitte warte einige Minuten, bevor du erneut eine E-Mail anforderst.', 'info')
         return redirect(url_for('login'))
@@ -1092,17 +1244,11 @@ def dashboard():
     week_volume = sum(_session_volume(s) for s in week_sessions)
     week_days = len(set(s.timestamp.date() for s in week_sessions))
 
-    # Trainings-Streak (aufeinanderfolgende Wochen mit Training)
+    # Trainings-Streak (aufeinanderfolgende Wochen mit Training, 1 Query statt 52)
+    trained_weeks = _get_trained_weeks(current_user.id, num_weeks=52)
     streak = 0
     for i in range(52):
-        w_start = this_monday - datetime.timedelta(weeks=i)
-        w_end = w_start + datetime.timedelta(days=7)
-        cnt = ExerciseSession.query.filter(
-            ExerciseSession.user_id == current_user.id,
-            ExerciseSession.timestamp >= datetime.datetime.combine(w_start, datetime.time.min),
-            ExerciseSession.timestamp < datetime.datetime.combine(w_end, datetime.time.min),
-        ).count()
-        if cnt > 0:
+        if i in trained_weeks:
             streak += 1
         else:
             break
@@ -1136,10 +1282,11 @@ def dashboard():
 @app.route('/statistics')
 @login_required
 def statistics():
-    now = datetime.datetime.now()
-    # Alle Sessions des Users
+    now = _utcnow()
+    # Alle Sessions des Users (mit Exercise eager-loaded, vermeidet N+1)
     all_sessions = (
         ExerciseSession.query
+        .options(joinedload(ExerciseSession.exercise))
         .filter_by(user_id=current_user.id)
         .order_by(ExerciseSession.timestamp.desc())
         .all()
@@ -1323,7 +1470,7 @@ def achievements():
     training_days = db.session.query(
         db.func.date(ExerciseSession.timestamp)
     ).filter_by(user_id=current_user.id).distinct().count()
-    reg_days = (datetime.datetime.now() - (current_user.registration_date or datetime.datetime.now())).days
+    reg_days = (_utcnow() - (current_user.registration_date or _utcnow())).days
 
     earned = []
     locked = []
@@ -1367,14 +1514,17 @@ def progress_photos():
             flash('Keine Datei ausgewählt.', 'warning')
             return redirect(url_for('progress_photos'))
         if file and allowed_file(file.filename):
+            try:
+                body_weight_val = _parse_optional_body_weight(request.form.get('body_weight', ''))
+            except ValueError as exc:
+                flash(str(exc), 'danger')
+                return redirect(url_for('progress_photos'))
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             ext = file.filename.rsplit('.', 1)[1].lower()
             filename = f'{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}'
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             notes = request.form.get('notes', '').strip() or None
-            bw = request.form.get('body_weight', '').strip()
-            body_weight_val = float(bw) if bw else None
             photo = ProgressPhoto(
                 user_id=current_user.id,
                 filename=filename,
@@ -1420,8 +1570,10 @@ def delete_progress_photo(photo_id):
 @app.route('/calendar')
 @login_required
 def training_calendar():
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    month = request.args.get('month', datetime.datetime.now().month, type=int)
+    try:
+        year, month = _parse_calendar_month_args()
+    except ValueError:
+        abort(400)
     # Grenzen für den Monat berechnen
     first_day = datetime.date(year, month, 1)
     if month == 12:
@@ -1697,6 +1849,19 @@ def training_plan_detail(training_plan_id):
         position_map[row[0]] = row[2] if row[2] is not None else 999999
     # Übungen nach Position sortieren
     sorted_exercises = sorted(training_plan.exercises, key=lambda ex: (position_map.get(ex.id, 999999), ex.id))
+    # Alle Sessions des Users für alle Übungen dieses Plans in einer Query laden (vermeidet N+1)
+    exercise_ids = [ex.id for ex in sorted_exercises if not ex.is_separator]
+    all_plan_sessions = (
+        ExerciseSession.query
+        .filter(
+            ExerciseSession.exercise_id.in_(exercise_ids),
+            ExerciseSession.user_id == current_user.id,
+        )
+        .all()
+    ) if exercise_ids else []
+    sessions_by_exercise = {}
+    for s in all_plan_sessions:
+        sessions_by_exercise.setdefault(s.exercise_id, []).append(s)
     exercise_overview = []
     for exercise in sorted_exercises:
         if exercise.is_separator:
@@ -1710,7 +1875,7 @@ def training_plan_detail(training_plan_id):
                 'is_separator': True,
             })
             continue
-        user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
+        user_sessions = sessions_by_exercise.get(exercise.id, [])
         is_cardio = (exercise.exercise_type == 'ausdauer')
         if is_cardio:
             # Einfache Cardio-Stats (keine Gewicht/Reps-Berechnungen)
@@ -1881,6 +2046,7 @@ def copy_shared_plan(token):
             video_url=exercise.video_url,
             muscle_group=exercise.muscle_group,
             is_separator=exercise.is_separator,
+            exercise_type=exercise.exercise_type,
             user_id=current_user.id,
         )
         db.session.add(new_exercise)
@@ -1898,6 +2064,19 @@ def print_training_plan(training_plan_id):
     if training_plan.user_id != current_user.id:
         abort(403)
     include_sessions = request.args.get('include_sessions', '0') == '1'
+    # Alle Sessions des Users für diesen Plan in einer Query laden (vermeidet N+1)
+    print_exercise_ids = [ex.id for ex in training_plan.exercises if not ex.is_separator]
+    all_print_sessions = (
+        ExerciseSession.query
+        .filter(
+            ExerciseSession.exercise_id.in_(print_exercise_ids),
+            ExerciseSession.user_id == current_user.id,
+        )
+        .all()
+    ) if print_exercise_ids else []
+    print_sessions_map = {}
+    for s in all_print_sessions:
+        print_sessions_map.setdefault(s.exercise_id, []).append(s)
     exercise_overview = []
     for exercise in training_plan.exercises:
         if exercise.is_separator:
@@ -1909,7 +2088,7 @@ def print_training_plan(training_plan_id):
                 'is_separator': True,
             })
             continue
-        user_sessions = [s for s in exercise.sessions if s.user_id == current_user.id]
+        user_sessions = print_sessions_map.get(exercise.id, [])
         user_sessions_sorted = sorted(user_sessions, key=lambda s: s.timestamp, reverse=True)
         stats = calculate_exercise_statistics(user_sessions)
         exercise_overview.append({
@@ -1924,7 +2103,7 @@ def print_training_plan(training_plan_id):
         training_plan=training_plan,
         exercise_overview=exercise_overview,
         include_sessions=include_sessions,
-        print_date=datetime.datetime.now()
+        print_date=_utcnow()
     )
 
 
@@ -2024,6 +2203,7 @@ def add_session(exercise_id):
             if is_cardio:
                 form.duration_minutes.data = last_session.duration_minutes
                 form.distance_km.data = last_session.distance_km
+                form.warmup_activity.data = last_session.warmup_activity
             else:
                 form.repetitions.data = last_session.repetitions
                 form.weight.data = int(last_session.weight) if last_session.weight is not None else None
@@ -2063,8 +2243,8 @@ def add_session(exercise_id):
             duration_minutes=form.duration_minutes.data if is_cardio else None,
             distance_km=distance_val if is_cardio else None,
             warmup_activity=form.warmup_activity.data or None,
-            warmup_duration=form.warmup_duration.data or None,
-            timestamp=datetime.datetime.now(),
+            warmup_duration=form.warmup_duration.data if not is_cardio else None,
+            timestamp=_utcnow(),
             perceived_exertion=form.perceived_exertion.data,
             notes=form.notes.data,
             user_id=current_user.id,
@@ -2115,20 +2295,11 @@ def exercise_detail(exercise_id):
         progression = calculate_progression_suggestion(all_sessions)
         cardio_stats = None
 
-    def serialize_session(s):
-        return {
-            'id': s.id,
-            'timestamp': s.timestamp.strftime('%d.%m.%Y %H:%M'),
-            'weight': s.weight,
-            'repetitions': s.repetitions,
-            'duration_minutes': s.duration_minutes,
-            'distance_km': s.distance_km,
-            'warmup_activity': s.warmup_activity,
-            'warmup_duration': s.warmup_duration,
-            'notes': s.notes,
-            'perceived_exertion': s.perceived_exertion,
-        }
-    all_sessions_serialized = [serialize_session(s) for s in all_sessions]
+    def _serialize_session_display(s):
+        d = serialize_session(s)
+        d['timestamp'] = s.timestamp.strftime('%d.%m.%Y %H:%M')
+        return d
+    all_sessions_serialized = [_serialize_session_display(s) for s in all_sessions]
     delete_exercise_form = DeleteExerciseForm()
     delete_session_form = DeleteSessionForm()
     app_settings = get_app_settings()
@@ -2231,14 +2402,26 @@ def delete_session(session_id):
 # Synchronisations-API (für Offline-Daten)
 # ----------------------------------------------------
 @app.route('/sync', methods=['POST'])
+@csrf.exempt
 @login_required
 def sync():
-    data = request.get_json()
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
     sessions_data = data.get('sessions', [])
-    sessions_to_add = []
+    if not isinstance(sessions_data, list):
+        return jsonify({'status': 'error', 'message': 'sessions must be a list'}), 400
+    synced_uuids = []
     for session_info in sessions_data:
+        if not isinstance(session_info, dict):
+            return jsonify({'status': 'error', 'message': 'each session must be an object'}), 400
+        client_uuid = session_info.get('uuid')
+        # Deduplication
+        if client_uuid and ExerciseSession.query.filter_by(client_uuid=client_uuid).first():
+            synced_uuids.append(client_uuid)
+            continue
         exercise_id = session_info.get('exercise_id')
-        exercise = Exercise.query.get(exercise_id)
+        exercise = db.session.get(Exercise, exercise_id)
         if not exercise:
             return jsonify({'status': 'error', 'message': f'Übung {exercise_id} existiert nicht'}), 400
         if not any(p.user_id == current_user.id for p in exercise.training_plans):
@@ -2246,7 +2429,7 @@ def sync():
         try:
             timestamp = datetime.datetime.fromisoformat(session_info.get('timestamp'))
         except Exception:
-            timestamp = datetime.datetime.now()
+            timestamp = _utcnow()
         perceived_exertion = session_info.get('perceived_exertion')
         if perceived_exertion == '' or perceived_exertion is None:
             perceived_exertion = None
@@ -2267,12 +2450,59 @@ def sync():
             notes=session_info.get('notes'),
             perceived_exertion=perceived_exertion,
             user_id=current_user.id,
+            client_uuid=client_uuid,
         )
-        sessions_to_add.append(new_session)
-    for sess in sessions_to_add:
-        db.session.add(sess)
+        db.session.add(new_session)
+        if client_uuid:
+            synced_uuids.append(client_uuid)
     db.session.commit()
-    return jsonify({'status': 'success'}), 200
+    return jsonify({'status': 'success', 'synced_uuids': synced_uuids}), 200
+
+
+@app.route('/sync_weights', methods=['POST'])
+@csrf.exempt
+@login_required
+def sync_weights():
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
+    weights_data = data.get('weights', [])
+    if not isinstance(weights_data, list):
+        return jsonify({'status': 'error', 'message': 'weights must be a list'}), 400
+    synced_uuids = []
+    for w in weights_data:
+        if not isinstance(w, dict):
+            return jsonify({'status': 'error', 'message': 'each weight entry must be an object'}), 400
+        client_uuid = w.get('uuid')
+        # Deduplication
+        if client_uuid and BodyWeight.query.filter_by(client_uuid=client_uuid).first():
+            synced_uuids.append(client_uuid)
+            continue
+        weight_val = w.get('weight')
+        if weight_val is None:
+            continue
+        try:
+            weight_val = float(weight_val)
+        except (TypeError, ValueError):
+            continue
+        if weight_val < 20 or weight_val > 500:
+            continue
+        try:
+            timestamp = datetime.datetime.fromisoformat(w.get('timestamp'))
+        except Exception:
+            timestamp = _utcnow()
+        new_entry = BodyWeight(
+            user_id=current_user.id,
+            weight=weight_val,
+            timestamp=timestamp,
+            notes=w.get('notes') or None,
+            client_uuid=client_uuid,
+        )
+        db.session.add(new_entry)
+        if client_uuid:
+            synced_uuids.append(client_uuid)
+    db.session.commit()
+    return jsonify({'status': 'success', 'synced_uuids': synced_uuids}), 200
 
 # ----------------------------------------------------
 # Admin-Funktionalitäten
@@ -2312,7 +2542,7 @@ def admin_settings():
         settings.smtp_port = form.smtp_port.data or 587
         settings.smtp_username = form.smtp_username.data
         if form.smtp_password.data:
-            settings.smtp_password = form.smtp_password.data
+            settings.smtp_password = encrypt_value(form.smtp_password.data)
         settings.smtp_use_tls = form.smtp_use_tls.data
         settings.smtp_sender_email = form.smtp_sender_email.data
         db.session.commit()
@@ -2338,13 +2568,7 @@ def admin_test_email():
     html = f'<p>Dies ist eine Test-E-Mail von <strong>{app_name}</strong>. Die SMTP-Konfiguration funktioniert!</p>'
     msg.attach(MIMEText(html, 'html'))
     try:
-        if settings.smtp_use_tls:
-            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
-            server.starttls()
-        else:
-            server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
-        if settings.smtp_username and settings.smtp_password:
-            server.login(settings.smtp_username, settings.smtp_password)
+        server = _smtp_connect(settings)
         server.sendmail(settings.smtp_sender_email, test_to, msg.as_string())
         server.quit()
         flash(f'Test-E-Mail an {test_to} gesendet!', 'success')
@@ -2372,13 +2596,7 @@ def admin_broadcast_email():
         sent = 0
         errors = 0
         try:
-            if settings.smtp_use_tls:
-                server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port)
-            if settings.smtp_username and settings.smtp_password:
-                server.login(settings.smtp_username, settings.smtp_password)
+            server = _smtp_connect(settings)
             for user in recipients:
                 try:
                     msg = MIMEMultipart('alternative')
@@ -2572,16 +2790,14 @@ def view_footer_page(page_id):
     # Convert markdown to HTML
     raw_html = markdown.markdown(page.content)
     # Sanitize HTML - only allow safe tags for formatted text
-    allowed_tags = [
+    allowed_tags = {
         'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'hr', 'a'
-    ]
-    allowed_attrs = {
-        'a': ['href', 'title'],  # Allow links but not javascript:
     }
-    html = bleach.clean(raw_html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
-    # Ensure links don't use javascript: protocol
-    html = bleach.linkify(html)
+    allowed_attrs = {
+        'a': {'href', 'title'},
+    }
+    html = nh3.clean(raw_html, tags=allowed_tags, attributes=allowed_attrs, url_schemes={'http', 'https', 'mailto'})
     return render_template('footer_page.html', page=page, html_content=html)
 
 
@@ -2781,29 +2997,62 @@ def add_template_to_account(template_plan_id):
 
 @api_bp.route('/register', methods=['POST'])
 def api_register():
-    data = request.get_json() or {}
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
     username = data.get('username')
     password = data.get('password')
     if not username or not password:
         return jsonify({'error': 'username and password required'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'password must be at least 8 characters'}), 400
+    if len(username) < 3 or len(username) > 150:
+        return jsonify({'error': 'username must be between 3 and 150 characters'}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'username exists'}), 400
+    settings = get_app_settings()
+    email = (data.get('email') or '').strip() or None
+    email_required = settings.require_email_verification
+    if email_required and not email:
+        return jsonify({'error': 'email required when email verification is enabled'}), 400
+    if email and User.query.filter_by(email=email).first():
+        return jsonify({'error': 'email exists'}), 400
+    is_first_user = User.query.first() is None
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-    new_user = User(username=username, password=hashed_password, is_admin=(User.query.first() is None))
+    new_user = User(
+        username=username,
+        password=hashed_password,
+        is_admin=is_first_user,
+        email=email,
+    )
+    if email_required and not is_first_user:
+        new_user.email_confirmed = False
+        new_user.email_token = secrets.token_urlsafe(32)
+        new_user.email_token_created = _utcnow()
+    else:
+        new_user.email_confirmed = True
     db.session.add(new_user)
     db.session.commit()
+    if email_required and not is_first_user:
+        send_verification_email(new_user)
+        return jsonify({'message': 'registered', 'email_verification_required': True}), 201
     return jsonify({'message': 'registered'}), 201
 
 
 @api_bp.route('/login', methods=['POST'])
 def api_login():
-    data = request.get_json() or {}
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
     username = data.get('username')
     password = data.get('password')
     user = User.query.filter_by(username=username).first()
     if user and check_password_hash(user.password, password):
+        settings = get_app_settings()
+        if settings.require_email_verification and not user.email_confirmed:
+            return jsonify({'error': 'email confirmation required'}), 403
         login_user(user)
-        user.last_login = datetime.datetime.now()
+        user.last_login = _utcnow()
         db.session.commit()
         return jsonify({'message': 'logged in'})
     return jsonify({'error': 'invalid credentials'}), 401
@@ -2904,7 +3153,9 @@ def api_add_session(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     if not any(p.user_id == current_user.id for p in exercise.training_plans):
         abort(403)
-    data = request.get_json() or {}
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
     is_cardio = (exercise.exercise_type == 'ausdauer')
     repetitions = data.get('repetitions')
     weight = data.get('weight')
@@ -2917,20 +3168,40 @@ def api_add_session(exercise_id):
     if is_cardio:
         if duration_minutes is None:
             return jsonify({'error': 'duration_minutes required for cardio exercises'}), 400
+        try:
+            duration_minutes = _parse_int_field(duration_minutes, 'duration_minutes', minimum=1)
+            if distance_km not in (None, ''):
+                distance_km = _parse_float_field(distance_km, 'distance_km', minimum=0)
+            else:
+                distance_km = None
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
     else:
         if repetitions is None or weight is None:
             return jsonify({'error': 'repetitions and weight required'}), 400
+        try:
+            repetitions = _parse_int_field(repetitions, 'repetitions', minimum=1)
+            weight = _parse_float_field(weight, 'weight', minimum=0)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
     if perceived_exertion == '' or perceived_exertion is None:
         perceived_exertion = None
     else:
         try:
-            perceived_exertion = int(perceived_exertion)
-        except (TypeError, ValueError):
-            return jsonify({'error': 'perceived_exertion must be an integer'}), 400
+            perceived_exertion = _parse_int_field(perceived_exertion, 'perceived_exertion', minimum=1, maximum=10)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+    if warmup_duration not in (None, ''):
+        try:
+            warmup_duration = _parse_int_field(warmup_duration, 'warmup_duration', minimum=1)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+    else:
+        warmup_duration = None
     pr_records = []
     if not is_cardio:
         pr_records = check_new_personal_records(
-            exercise_id, current_user.id, int(weight), int(repetitions)
+            exercise_id, current_user.id, int(weight), repetitions
         )
     new_session = ExerciseSession(
         exercise_id=exercise_id,
@@ -2940,7 +3211,7 @@ def api_add_session(exercise_id):
         distance_km=distance_km if is_cardio else None,
         warmup_activity=warmup_activity,
         warmup_duration=warmup_duration,
-        timestamp=datetime.datetime.now(),
+        timestamp=_utcnow(),
         notes=notes,
         perceived_exertion=perceived_exertion,
         user_id=current_user.id,
@@ -2952,6 +3223,789 @@ def api_add_session(exercise_id):
     return jsonify({'id': new_session.id, 'personal_records': pr_records}), 201
 
 
+# ----------------------------------------------------
+# API: Sessions DELETE
+# ----------------------------------------------------
+
+@api_bp.route('/sessions/<int:session_id>', methods=['DELETE'])
+@login_required
+def api_delete_session(session_id):
+    session = ExerciseSession.query.get_or_404(session_id)
+    if session.user_id != current_user.id:
+        abort(403)
+    db.session.delete(session)
+    db.session.commit()
+    return jsonify({'message': 'session deleted'})
+
+
+# ----------------------------------------------------
+# API: Training Plans UPDATE / DELETE
+# ----------------------------------------------------
+
+@api_bp.route('/training_plans/<int:plan_id>', methods=['PUT'])
+@login_required
+def api_update_plan(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    data = request.get_json() or {}
+    if 'title' in data:
+        plan.title = data['title']
+    if 'description' in data:
+        plan.description = data['description']
+    db.session.commit()
+    return jsonify({'id': plan.id, 'title': plan.title, 'description': plan.description})
+
+
+@api_bp.route('/training_plans/<int:plan_id>', methods=['DELETE'])
+@login_required
+def api_delete_plan(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    db.session.delete(plan)
+    db.session.commit()
+    return jsonify({'message': 'training plan deleted'})
+
+
+@api_bp.route('/training_plans/<int:plan_id>/detail', methods=['GET'])
+@login_required
+def api_plan_detail(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    rows = db.session.execute(
+        db.text('SELECT exercise_id, superset_group, position FROM plan_exercises WHERE training_plan_id = :pid'),
+        {'pid': plan_id}
+    ).fetchall()
+    superset_map = {}
+    position_map = {}
+    for row in rows:
+        if row[1] is not None:
+            superset_map[row[0]] = row[1]
+        position_map[row[0]] = row[2] if row[2] is not None else 999999
+    sorted_exercises = sorted(plan.exercises, key=lambda ex: (position_map.get(ex.id, 999999), ex.id))
+    exercises_out = []
+    for ex in sorted_exercises:
+        ex_data = serialize_exercise(ex)
+        ex_data['exercise_type'] = ex.exercise_type
+        ex_data['muscle_group'] = ex.muscle_group
+        ex_data['superset_group'] = superset_map.get(ex.id)
+        ex_data['position'] = position_map.get(ex.id, 999999)
+        exercises_out.append(ex_data)
+    return jsonify({
+        'id': plan.id,
+        'title': plan.title,
+        'description': plan.description,
+        'share_token': plan.share_token,
+        'exercises': exercises_out,
+    })
+
+
+# ----------------------------------------------------
+# API: Exercises UPDATE / DELETE
+# ----------------------------------------------------
+
+@api_bp.route('/exercises/<int:exercise_id>', methods=['PUT'])
+@login_required
+def api_update_exercise(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    if not any(p.user_id == current_user.id for p in exercise.training_plans):
+        abort(403)
+    if not exercise_owned_exclusively_by(current_user.id, exercise):
+        return jsonify({'error': 'exercise is shared and cannot be edited'}), 403
+    data = request.get_json() or {}
+    if 'name' in data:
+        exercise.name = data['name']
+    if 'description' in data:
+        exercise.description = data['description']
+    if 'muscle_group' in data:
+        exercise.muscle_group = data['muscle_group'] or None
+    db.session.commit()
+    return jsonify(serialize_exercise(exercise))
+
+
+@api_bp.route('/exercises/<int:exercise_id>', methods=['DELETE'])
+@login_required
+def api_delete_exercise(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    user_plan = next((p for p in exercise.training_plans if p.user_id == current_user.id), None)
+    if not user_plan:
+        abort(403)
+    user_plan.exercises.remove(exercise)
+    if not exercise.training_plans:
+        db.session.delete(exercise)
+    db.session.commit()
+    return jsonify({'message': 'exercise deleted'})
+
+
+# ----------------------------------------------------
+# API: Superset / Reorder
+# ----------------------------------------------------
+
+@api_bp.route('/training_plans/<int:plan_id>/set_superset', methods=['POST'])
+@login_required
+def api_set_superset(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    data = request.get_json() or {}
+    exercise_id = data.get('exercise_id')
+    group = data.get('superset_group')
+    if exercise_id is None:
+        return jsonify({'error': 'exercise_id required'}), 400
+    if not group:
+        group = None
+    db.session.execute(
+        db.text('UPDATE plan_exercises SET superset_group = :grp WHERE training_plan_id = :pid AND exercise_id = :eid'),
+        {'grp': group, 'pid': plan_id, 'eid': exercise_id}
+    )
+    db.session.commit()
+    return jsonify({'message': 'superset updated', 'superset_group': group})
+
+
+@api_bp.route('/training_plans/<int:plan_id>/reorder', methods=['POST'])
+@login_required
+def api_reorder_exercises(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    data = request.get_json() or {}
+    exercise_id = data.get('exercise_id')
+    direction = data.get('direction')
+    if exercise_id is None or direction not in ('up', 'down'):
+        return jsonify({'error': 'exercise_id and direction (up/down) required'}), 400
+    rows = db.session.execute(
+        db.text('SELECT exercise_id, position FROM plan_exercises WHERE training_plan_id = :pid ORDER BY COALESCE(position, 999999), exercise_id'),
+        {'pid': plan_id}
+    ).fetchall()
+    ordered = [(row[0], row[1]) for row in rows]
+    idx = None
+    for i, (eid, _) in enumerate(ordered):
+        if eid == exercise_id:
+            idx = i
+            break
+    if idx is None:
+        return jsonify({'error': 'exercise not found in plan'}), 404
+    if direction == 'up' and idx > 0:
+        ordered[idx], ordered[idx - 1] = ordered[idx - 1], ordered[idx]
+    elif direction == 'down' and idx < len(ordered) - 1:
+        ordered[idx], ordered[idx + 1] = ordered[idx + 1], ordered[idx]
+    for pos, (eid, _) in enumerate(ordered):
+        db.session.execute(
+            db.text('UPDATE plan_exercises SET position = :pos WHERE training_plan_id = :pid AND exercise_id = :eid'),
+            {'pos': pos, 'pid': plan_id, 'eid': eid}
+        )
+    db.session.commit()
+    return jsonify({'message': 'exercises reordered'})
+
+
+# ----------------------------------------------------
+# API: Body Weight
+# ----------------------------------------------------
+
+@api_bp.route('/body_weight', methods=['GET'])
+@login_required
+def api_get_body_weight():
+    entries = BodyWeight.query.filter_by(user_id=current_user.id).order_by(BodyWeight.timestamp.desc()).all()
+    stats = None
+    if entries:
+        weights = [e.weight for e in entries]
+        chart_entries = sorted(entries, key=lambda e: e.timestamp)
+        stats = {
+            'current': entries[0].weight,
+            'min': min(weights),
+            'max': max(weights),
+            'avg': round(sum(weights) / len(weights), 1),
+            'total_entries': len(entries),
+        }
+        if len(entries) > 1:
+            stats['change'] = round(chart_entries[-1].weight - chart_entries[0].weight, 1)
+    return jsonify({
+        'entries': [{
+            'id': e.id,
+            'weight': e.weight,
+            'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+            'notes': e.notes,
+        } for e in entries],
+        'stats': stats,
+    })
+
+
+@api_bp.route('/body_weight', methods=['POST'])
+@login_required
+def api_add_body_weight():
+    data = request.get_json() or {}
+    weight = data.get('weight')
+    if weight is None:
+        return jsonify({'error': 'weight required'}), 400
+    try:
+        weight = float(weight)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'weight must be a number'}), 400
+    entry = BodyWeight(
+        user_id=current_user.id,
+        weight=weight,
+        notes=data.get('notes') or None,
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return jsonify({'id': entry.id, 'weight': entry.weight, 'timestamp': entry.timestamp.isoformat()}), 201
+
+
+@api_bp.route('/body_weight/<int:entry_id>', methods=['DELETE'])
+@login_required
+def api_delete_body_weight(entry_id):
+    entry = BodyWeight.query.get_or_404(entry_id)
+    if entry.user_id != current_user.id:
+        abort(403)
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'message': 'entry deleted'})
+
+
+# ----------------------------------------------------
+# API: Progress Photos
+# ----------------------------------------------------
+
+@api_bp.route('/progress_photos', methods=['GET'])
+@login_required
+def api_get_progress_photos():
+    photos = ProgressPhoto.query.filter_by(user_id=current_user.id).order_by(ProgressPhoto.timestamp.desc()).all()
+    return jsonify([{
+        'id': p.id,
+        'filename': p.filename,
+        'url': f'/static/uploads/photos/{p.filename}',
+        'timestamp': p.timestamp.isoformat() if p.timestamp else None,
+        'notes': p.notes,
+        'body_weight': p.body_weight,
+    } for p in photos])
+
+
+@api_bp.route('/progress_photos', methods=['POST'])
+@login_required
+def api_upload_progress_photo():
+    if 'photo' not in request.files:
+        return jsonify({'error': 'photo file required'}), 400
+    file = request.files['photo']
+    if file.filename == '':
+        return jsonify({'error': 'no file selected'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'invalid file type, allowed: png, jpg, jpeg, webp'}), 400
+    try:
+        body_weight_val = _parse_optional_body_weight(request.form.get('body_weight', ''))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    filename = f'{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}'
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    notes = request.form.get('notes', '').strip() or None
+    photo = ProgressPhoto(
+        user_id=current_user.id,
+        filename=filename,
+        notes=notes,
+        body_weight=body_weight_val,
+    )
+    db.session.add(photo)
+    db.session.commit()
+    return jsonify({
+        'id': photo.id,
+        'filename': photo.filename,
+        'url': f'/static/uploads/photos/{photo.filename}',
+        'timestamp': photo.timestamp.isoformat(),
+    }), 201
+
+
+@api_bp.route('/progress_photos/<int:photo_id>', methods=['DELETE'])
+@login_required
+def api_delete_progress_photo(photo_id):
+    photo = ProgressPhoto.query.get_or_404(photo_id)
+    if photo.user_id != current_user.id:
+        abort(403)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+    db.session.delete(photo)
+    db.session.commit()
+    return jsonify({'message': 'photo deleted'})
+
+
+# ----------------------------------------------------
+# API: Training Calendar
+# ----------------------------------------------------
+
+@api_bp.route('/calendar', methods=['GET'])
+@login_required
+def api_get_calendar():
+    try:
+        year, month = _parse_calendar_month_args()
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    first_day = datetime.date(year, month, 1)
+    if month == 12:
+        last_day = datetime.date(year + 1, 1, 1)
+    else:
+        last_day = datetime.date(year, month + 1, 1)
+    sessions = (
+        ExerciseSession.query
+        .filter_by(user_id=current_user.id)
+        .filter(ExerciseSession.timestamp >= datetime.datetime.combine(first_day, datetime.time.min))
+        .filter(ExerciseSession.timestamp < datetime.datetime.combine(last_day, datetime.time.min))
+        .all()
+    )
+    day_counts = {}
+    for s in sessions:
+        day = s.timestamp.date().isoformat()
+        day_counts[day] = day_counts.get(day, 0) + 1
+    planned = PlannedTraining.query.filter(
+        PlannedTraining.user_id == current_user.id,
+        PlannedTraining.date >= first_day,
+        PlannedTraining.date < last_day,
+    ).all()
+    planned_list = [{'date': p.date.isoformat(), 'label': p.label} for p in planned]
+    total_sessions = len(sessions)
+    training_days = len(set(s.timestamp.date() for s in sessions))
+    total_volume = sum(_session_volume(s) for s in sessions)
+    return jsonify({
+        'year': year,
+        'month': month,
+        'day_counts': day_counts,
+        'planned': planned_list,
+        'total_sessions': total_sessions,
+        'training_days': training_days,
+        'total_volume': total_volume,
+    })
+
+
+@api_bp.route('/calendar/plan', methods=['POST'])
+@login_required
+def api_plan_training_day():
+    data = request.get_json() or {}
+    date_str = data.get('date')
+    label = (data.get('label') or '').strip() or None
+    if not date_str:
+        return jsonify({'error': 'date required (YYYY-MM-DD)'}), 400
+    try:
+        day = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'invalid date format, use YYYY-MM-DD'}), 400
+    existing = PlannedTraining.query.filter_by(user_id=current_user.id, date=day).first()
+    if existing:
+        existing.label = label
+    else:
+        db.session.add(PlannedTraining(user_id=current_user.id, date=day, label=label))
+    db.session.commit()
+    return jsonify({'message': 'training day planned', 'date': day.isoformat(), 'label': label}), 201
+
+
+@api_bp.route('/calendar/unplan', methods=['POST'])
+@login_required
+def api_unplan_training_day():
+    data = request.get_json() or {}
+    date_str = data.get('date')
+    if not date_str:
+        return jsonify({'error': 'date required (YYYY-MM-DD)'}), 400
+    try:
+        day = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'invalid date format, use YYYY-MM-DD'}), 400
+    deleted = PlannedTraining.query.filter_by(user_id=current_user.id, date=day).delete()
+    db.session.commit()
+    if deleted:
+        return jsonify({'message': 'training day unplanned'})
+    return jsonify({'message': 'no planned training found for this date'}), 404
+
+
+# ----------------------------------------------------
+# API: Dashboard
+# ----------------------------------------------------
+
+@api_bp.route('/dashboard', methods=['GET'])
+@login_required
+def api_dashboard():
+    today = datetime.date.today()
+    this_monday = today - datetime.timedelta(days=today.weekday())
+    week_sessions = (
+        ExerciseSession.query
+        .filter(
+            ExerciseSession.user_id == current_user.id,
+            ExerciseSession.timestamp >= datetime.datetime.combine(this_monday, datetime.time.min),
+        )
+        .all()
+    )
+    week_sets = len(week_sessions)
+    week_volume = sum(_session_volume(s) for s in week_sessions)
+    week_days = len(set(s.timestamp.date() for s in week_sessions))
+    streak = 0
+    for i in range(52):
+        w_start = this_monday - datetime.timedelta(weeks=i)
+        w_end = w_start + datetime.timedelta(days=7)
+        cnt = ExerciseSession.query.filter(
+            ExerciseSession.user_id == current_user.id,
+            ExerciseSession.timestamp >= datetime.datetime.combine(w_start, datetime.time.min),
+            ExerciseSession.timestamp < datetime.datetime.combine(w_end, datetime.time.min),
+        ).count()
+        if cnt > 0:
+            streak += 1
+        else:
+            break
+    deload_needed, weeks_trained = check_deload_reminder(current_user.id)
+    upcoming_planned = (
+        PlannedTraining.query
+        .filter(
+            PlannedTraining.user_id == current_user.id,
+            PlannedTraining.date >= today,
+            PlannedTraining.date <= today + datetime.timedelta(days=7),
+        )
+        .order_by(PlannedTraining.date)
+        .all()
+    )
+    plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
+    return jsonify({
+        'training_plans': [serialize_training_plan(p) for p in plans],
+        'week_stats': {
+            'sets': week_sets,
+            'volume': week_volume,
+            'training_days': week_days,
+        },
+        'streak': streak,
+        'deload_needed': deload_needed,
+        'weeks_trained': weeks_trained,
+        'upcoming_planned': [{'date': p.date.isoformat(), 'label': p.label} for p in upcoming_planned],
+    })
+
+
+# ----------------------------------------------------
+# API: Statistics
+# ----------------------------------------------------
+
+@api_bp.route('/statistics', methods=['GET'])
+@login_required
+def api_statistics():
+    now = _utcnow()
+    today = now.date()
+    this_monday = today - datetime.timedelta(days=today.weekday())
+    last_monday = this_monday - datetime.timedelta(days=7)
+
+    all_sessions = (
+        ExerciseSession.query
+        .filter_by(user_id=current_user.id)
+        .order_by(ExerciseSession.timestamp.desc())
+        .all()
+    )
+    kraft_sessions = [s for s in all_sessions if s.weight is not None and s.repetitions is not None]
+    cardio_sessions = [s for s in all_sessions if s.exercise.exercise_type == 'ausdauer']
+
+    # Muskelgruppen-Volumen
+    muscle_volume = {}
+    for s in kraft_sessions:
+        mg = s.exercise.muscle_group or 'Nicht zugeordnet'
+        muscle_volume[mg] = muscle_volume.get(mg, 0) + _session_volume(s)
+
+    # Wochenvergleich
+    this_week = [s for s in kraft_sessions if s.timestamp.date() >= this_monday]
+    last_week = [s for s in kraft_sessions if last_monday <= s.timestamp.date() < this_monday]
+    this_week_volume = sum(_session_volume(s) for s in this_week)
+    last_week_volume = sum(_session_volume(s) for s in last_week)
+
+    # Übungs-Vergleich
+    tw_by_ex = {}
+    lw_by_ex = {}
+    for s in this_week:
+        name = s.exercise.name
+        if name not in tw_by_ex:
+            tw_by_ex[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
+        tw_by_ex[name]['sets'] += 1
+        tw_by_ex[name]['volume'] += _session_volume(s)
+        tw_by_ex[name]['max_weight'] = max(tw_by_ex[name]['max_weight'], _session_weight(s))
+    for s in last_week:
+        name = s.exercise.name
+        if name not in lw_by_ex:
+            lw_by_ex[name] = {'sets': 0, 'volume': 0, 'max_weight': 0}
+        lw_by_ex[name]['sets'] += 1
+        lw_by_ex[name]['volume'] += _session_volume(s)
+        lw_by_ex[name]['max_weight'] = max(lw_by_ex[name]['max_weight'], _session_weight(s))
+    exercise_comparison = []
+    for name in sorted(set(list(tw_by_ex.keys()) + list(lw_by_ex.keys()))):
+        tw = tw_by_ex.get(name, {'sets': 0, 'volume': 0, 'max_weight': 0})
+        lw = lw_by_ex.get(name, {'sets': 0, 'volume': 0, 'max_weight': 0})
+        exercise_comparison.append({
+            'name': name,
+            'this_week': tw,
+            'last_week': lw,
+            'volume_diff': tw['volume'] - lw['volume'],
+            'weight_diff': tw['max_weight'] - lw['max_weight'],
+        })
+
+    # Trainingsfrequenz (12 Wochen)
+    frequency_data = []
+    for i in range(11, -1, -1):
+        week_start = this_monday - datetime.timedelta(weeks=i)
+        week_end = week_start + datetime.timedelta(days=7)
+        week_sess = [s for s in kraft_sessions if week_start <= s.timestamp.date() < week_end]
+        frequency_data.append({
+            'label': week_start.strftime('%d.%m'),
+            'days': len(set(s.timestamp.date() for s in week_sess)),
+            'sets': len(week_sess),
+            'volume': sum(_session_volume(s) for s in week_sess),
+        })
+
+    # Cardio-Statistiken
+    cardio_this_week = [s for s in cardio_sessions if s.timestamp.date() >= this_monday]
+    cardio_last_week = [s for s in cardio_sessions if last_monday <= s.timestamp.date() < this_monday]
+    cardio_by_activity = {}
+    for s in cardio_sessions:
+        name = s.exercise.name
+        if name not in cardio_by_activity:
+            cardio_by_activity[name] = {'sessions': 0, 'duration': 0, 'distance': 0}
+        cardio_by_activity[name]['sessions'] += 1
+        cardio_by_activity[name]['duration'] += s.duration_minutes or 0
+        cardio_by_activity[name]['distance'] += s.distance_km or 0
+    cardio_frequency = []
+    for i in range(11, -1, -1):
+        week_start = this_monday - datetime.timedelta(weeks=i)
+        week_end = week_start + datetime.timedelta(days=7)
+        week_cardio = [s for s in cardio_sessions if week_start <= s.timestamp.date() < week_end]
+        cardio_frequency.append({
+            'label': week_start.strftime('%d.%m'),
+            'sessions': len(week_cardio),
+            'duration': sum(s.duration_minutes or 0 for s in week_cardio),
+            'distance': round(sum(s.distance_km or 0 for s in week_cardio), 1),
+        })
+
+    return jsonify({
+        'strength': {
+            'muscle_volume': muscle_volume,
+            'this_week_volume': this_week_volume,
+            'last_week_volume': last_week_volume,
+            'volume_diff': this_week_volume - last_week_volume,
+            'this_week_sets': len(this_week),
+            'last_week_sets': len(last_week),
+            'sets_diff': len(this_week) - len(last_week),
+            'exercise_comparison': exercise_comparison,
+            'frequency': frequency_data,
+        },
+        'cardio': {
+            'total_sessions': len(cardio_sessions),
+            'total_duration': sum(s.duration_minutes or 0 for s in cardio_sessions),
+            'total_distance': round(sum(s.distance_km or 0 for s in cardio_sessions), 1),
+            'avg_duration': round(sum(s.duration_minutes or 0 for s in cardio_sessions) / len(cardio_sessions)) if cardio_sessions else 0,
+            'this_week_duration': sum(s.duration_minutes or 0 for s in cardio_this_week),
+            'last_week_duration': sum(s.duration_minutes or 0 for s in cardio_last_week),
+            'this_week_distance': round(sum(s.distance_km or 0 for s in cardio_this_week), 1),
+            'last_week_distance': round(sum(s.distance_km or 0 for s in cardio_last_week), 1),
+            'this_week_sessions': len(cardio_this_week),
+            'last_week_sessions': len(cardio_last_week),
+            'by_activity': cardio_by_activity,
+            'frequency': cardio_frequency,
+        },
+    })
+
+
+# ----------------------------------------------------
+# API: Achievements
+# ----------------------------------------------------
+
+@api_bp.route('/achievements', methods=['GET'])
+@login_required
+def api_achievements():
+    total_sessions = ExerciseSession.query.filter_by(user_id=current_user.id).count()
+    training_days = db.session.query(
+        db.func.date(ExerciseSession.timestamp)
+    ).filter_by(user_id=current_user.id).distinct().count()
+    reg_days = (_utcnow() - (current_user.registration_date or _utcnow())).days
+    earned = []
+    locked = []
+    for aid, name, desc, check_fn in ACHIEVEMENTS:
+        entry = {'id': aid, 'name': name, 'description': desc}
+        if check_fn(total_sessions, training_days, reg_days):
+            earned.append(entry)
+        else:
+            locked.append(entry)
+    return jsonify({
+        'earned': earned,
+        'locked': locked,
+        'stats': {
+            'total_sessions': total_sessions,
+            'training_days': training_days,
+            'member_days': reg_days,
+        },
+    })
+
+
+# ----------------------------------------------------
+# API: Training Plan Sharing
+# ----------------------------------------------------
+
+@api_bp.route('/training_plans/<int:plan_id>/share', methods=['POST'])
+@login_required
+def api_share_plan(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    if not plan.share_token:
+        plan.share_token = str(uuid.uuid4())
+        db.session.commit()
+    share_url = request.url_root.rstrip('/') + url_for('copy_shared_plan', token=plan.share_token)
+    return jsonify({'share_token': plan.share_token, 'share_url': share_url})
+
+
+@api_bp.route('/training_plans/<int:plan_id>/unshare', methods=['POST'])
+@login_required
+def api_unshare_plan(plan_id):
+    plan = TrainingPlan.query.get_or_404(plan_id)
+    if plan.user_id != current_user.id:
+        abort(403)
+    plan.share_token = None
+    db.session.commit()
+    return jsonify({'message': 'sharing disabled'})
+
+
+@api_bp.route('/shared/<token>/copy', methods=['POST'])
+@login_required
+def api_copy_shared_plan(token):
+    source_plan = TrainingPlan.query.filter_by(share_token=token).first_or_404()
+    if source_plan.user_id == current_user.id:
+        return jsonify({'error': 'cannot copy your own plan'}), 400
+    new_plan = TrainingPlan(
+        title=source_plan.title + ' (kopiert)',
+        description=source_plan.description,
+        user_id=current_user.id,
+    )
+    db.session.add(new_plan)
+    db.session.flush()
+    for exercise in source_plan.exercises:
+        new_exercise = Exercise(
+            name=exercise.name,
+            description=exercise.description,
+            video_url=exercise.video_url,
+            muscle_group=exercise.muscle_group,
+            exercise_type=exercise.exercise_type,
+            is_separator=exercise.is_separator,
+            user_id=current_user.id,
+        )
+        db.session.add(new_exercise)
+        db.session.flush()
+        new_plan.exercises.append(new_exercise)
+    db.session.commit()
+    return jsonify({'id': new_plan.id, 'title': new_plan.title}), 201
+
+
+# ----------------------------------------------------
+# API: Data Export
+# ----------------------------------------------------
+
+@api_bp.route('/export', methods=['GET'])
+@login_required
+def api_export():
+    plans = TrainingPlan.query.filter_by(user_id=current_user.id).all()
+    plan_exports = []
+    for plan in plans:
+        plan_dict = serialize_training_plan(plan)
+        exercises_out = []
+        for exercise in plan.exercises:
+            sessions = (
+                ExerciseSession.query
+                .filter_by(exercise_id=exercise.id, user_id=current_user.id)
+                .order_by(ExerciseSession.timestamp.asc())
+                .all()
+            )
+            exercises_out.append({
+                **serialize_exercise(exercise),
+                'exercise_type': exercise.exercise_type,
+                'muscle_group': exercise.muscle_group,
+                'sessions': [serialize_session(s) for s in sessions],
+            })
+        plan_exports.append({**plan_dict, 'exercises': exercises_out})
+
+    body_weights = BodyWeight.query.filter_by(user_id=current_user.id).order_by(BodyWeight.timestamp.asc()).all()
+    return jsonify({
+        'exported_at': _utcnow().isoformat(),
+        'training_plans': plan_exports,
+        'body_weights': [{
+            'id': e.id,
+            'weight': e.weight,
+            'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+            'notes': e.notes,
+        } for e in body_weights],
+    })
+
+
+# ----------------------------------------------------
+# API: Template Plans
+# ----------------------------------------------------
+
+@api_bp.route('/template_plans', methods=['GET'])
+@login_required
+def api_get_template_plans():
+    if current_user.is_admin or current_user.is_trainer:
+        templates = TemplateTrainingPlan.query.all()
+    else:
+        templates = TemplateTrainingPlan.query.filter_by(is_visible=True).all()
+    return jsonify([{
+        'id': t.id,
+        'title': t.title,
+        'description': t.description,
+        'is_visible': t.is_visible,
+        'exercises': [{
+            'id': e.id,
+            'name': e.name,
+            'description': e.description,
+            'is_separator': e.is_separator,
+        } for e in t.exercises],
+    } for t in templates])
+
+
+@api_bp.route('/template_plans/<int:template_id>', methods=['GET'])
+@login_required
+def api_get_template_plan(template_id):
+    template = TemplateTrainingPlan.query.get_or_404(template_id)
+    if not template.is_visible and not (current_user.is_admin or current_user.is_trainer):
+        abort(403)
+    return jsonify({
+        'id': template.id,
+        'title': template.title,
+        'description': template.description,
+        'is_visible': template.is_visible,
+        'exercises': [{
+            'id': e.id,
+            'name': e.name,
+            'description': e.description,
+            'is_separator': e.is_separator,
+        } for e in template.exercises],
+    })
+
+
+@api_bp.route('/template_plans/<int:template_id>/add_to_account', methods=['POST'])
+@login_required
+def api_add_template_to_account(template_id):
+    template = TemplateTrainingPlan.query.get_or_404(template_id)
+    if not template.is_visible and not (current_user.is_admin or current_user.is_trainer):
+        abort(403)
+    new_plan = TrainingPlan(
+        title=template.title,
+        description=template.description,
+        user_id=current_user.id,
+    )
+    db.session.add(new_plan)
+    db.session.flush()
+    for temp_ex in template.exercises:
+        exercise = Exercise(
+            name=temp_ex.name,
+            description=temp_ex.description,
+            is_separator=temp_ex.is_separator,
+            user_id=current_user.id,
+        )
+        db.session.add(exercise)
+        db.session.flush()
+        new_plan.exercises.append(exercise)
+    db.session.commit()
+    return jsonify({'id': new_plan.id, 'title': new_plan.title}), 201
+
+
+csrf.exempt(api_bp)
 app.register_blueprint(api_bp)
 
 
@@ -2975,14 +4029,19 @@ def serialize_exercise(exercise):
 
 
 def serialize_session(session):
-    return {
+    data = {
         'id': session.id,
         'timestamp': session.timestamp.isoformat() if session.timestamp else None,
         'weight': session.weight,
         'repetitions': session.repetitions,
         'notes': session.notes,
         'perceived_exertion': session.perceived_exertion,
+        'duration_minutes': session.duration_minutes,
+        'distance_km': session.distance_km,
+        'warmup_activity': session.warmup_activity,
+        'warmup_duration': session.warmup_duration,
     }
+    return data
 
 
 @app.route('/export/training-data')
@@ -3036,7 +4095,7 @@ def export_training_data():
     if export_format not in ('json', 'csv'):
         abort(400, description='Unsupported format. Use "json" or "csv".')
 
-    timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    timestamp = _utcnow()
 
     if export_format == 'json':
         payload = {
@@ -3074,6 +4133,10 @@ def export_training_data():
         'repetitions',
         'notes',
         'perceived_exertion',
+        'duration_minutes',
+        'distance_km',
+        'warmup_activity',
+        'warmup_duration',
     ])
 
     for row in session_rows:
@@ -3093,6 +4156,10 @@ def export_training_data():
             session['repetitions'] if session else '',
             session['notes'] if session else '',
             session['perceived_exertion'] if session else '',
+            session['duration_minutes'] if session else '',
+            session['distance_km'] if session else '',
+            session['warmup_activity'] if session else '',
+            session['warmup_duration'] if session else '',
         ])
 
     csv_bytes = csv_buffer.getvalue().encode('utf-8')
@@ -3137,4 +4204,4 @@ else:
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Tabellen erstellen (nur beim ersten Start)
-    app.run(debug=True)
+    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true')

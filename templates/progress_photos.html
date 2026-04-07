@@ -52,6 +52,7 @@
 
     <div class="s-card mb-3">
       <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
           <label class="small font-weight-bold" for="photo">Foto auswählen</label>
           <input type="file" name="photo" id="photo" class="form-control-file" accept="image/*" required>
@@ -82,17 +83,17 @@
           {% if photo.notes %}<div class="text-muted">{{ photo.notes }}</div>{% endif %}
           <form action="{{ url_for('delete_progress_photo', photo_id=photo.id) }}" method="POST" onsubmit="return confirm('Foto löschen?');" class="mt-1">
             {{ delete_form.hidden_tag() }}
-            <button type="submit" class="btn btn-outline-danger btn-sm btn-block py-0" style="font-size:0.75rem;">Löschen</button>
+            <button type="submit" class="btn btn-outline-danger btn-sm btn-block py-0 btn-action-sm">Löschen</button>
           </form>
         </div>
-        <div id="modal-img-{{ photo.id }}" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; align-items:center; justify-content:center; cursor:pointer;" onclick="this.style.display='none'">
+        <div id="modal-img-{{ photo.id }}" class="photo-modal" style="display:none;" onclick="this.style.display='none'">
           <img src="{{ url_for('static', filename='uploads/photos/' + photo.filename) }}" class="photo-modal-img">
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-      <div class="s-card text-center text-muted" style="font-size:0.9rem;">Noch keine Fotos. Dokumentiere deinen Fortschritt!</div>
+      <div class="s-card text-center text-muted fs-md">Noch keine Fotos. Dokumentiere deinen Fortschritt!</div>
     {% endif %}
 
     <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>

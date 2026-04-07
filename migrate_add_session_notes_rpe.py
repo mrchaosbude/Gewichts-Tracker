@@ -1,6 +1,8 @@
 import sqlite3
 
-DB_PATH = 'fitness.db'
+from migration_utils import resolve_db_path
+
+DB_PATH = resolve_db_path()
 
 
 def migrate(db_path=DB_PATH):

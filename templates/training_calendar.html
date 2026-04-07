@@ -28,6 +28,14 @@
       background: #f8f9fa;
       cursor: default;
     }
+    .calendar-table td:focus {
+      outline: 2px solid #007bff;
+      outline-offset: -2px;
+      z-index: 1;
+    }
+    [data-theme="dark"] .calendar-table td:focus {
+      outline-color: #4da3ff;
+    }
     .calendar-table td .day-num {
       font-size: 0.85rem;
       font-weight: 600;
@@ -174,30 +182,30 @@
 
     <div class="stat-row cols-3">
       <div class="stat-box green">
-        <div class="val" style="font-size:1.3rem;">{{ training_days }}</div>
+        <div class="val fs-xl">{{ training_days }}</div>
         <div class="lbl">Tage</div>
       </div>
       <div class="stat-box blue">
-        <div class="val" style="font-size:1.3rem;">{{ total_sessions }}</div>
+        <div class="val fs-xl">{{ total_sessions }}</div>
         <div class="lbl">Sätze</div>
       </div>
       <div class="stat-box orange">
-        <div class="val" style="font-size:1.3rem;">{{ total_volume }}</div>
+        <div class="val fs-xl">{{ total_volume }}</div>
         <div class="lbl">kg</div>
       </div>
     </div>
 
     <div class="table-responsive">
-      <table class="calendar-table">
+      <table class="calendar-table" role="grid" aria-label="Trainings-Kalender {{ month_name }} {{ year }}">
         <thead>
           <tr>
-            <th>Mo</th>
-            <th>Di</th>
-            <th>Mi</th>
-            <th>Do</th>
-            <th>Fr</th>
-            <th>Sa</th>
-            <th>So</th>
+            <th scope="col" abbr="Montag">Mo</th>
+            <th scope="col" abbr="Dienstag">Di</th>
+            <th scope="col" abbr="Mittwoch">Mi</th>
+            <th scope="col" abbr="Donnerstag">Do</th>
+            <th scope="col" abbr="Freitag">Fr</th>
+            <th scope="col" abbr="Samstag">Sa</th>
+            <th scope="col" abbr="Sonntag">So</th>
           </tr>
         </thead>
         <tbody>
@@ -205,12 +213,14 @@
           <tr>
             {% for day in week %}
               {% if day.day == 0 %}
-                <td class="empty"></td>
+                <td class="empty" role="gridcell"></td>
               {% else %}
                 {% set intensity = (day.count / max_count * 4)|int if day.count > 0 else 0 %}
                 {% if intensity > 4 %}{% set intensity = 4 %}{% endif %}
                 <td class="heat-{{ intensity }}{% if day.is_today %} today{% endif %}{% if day.planned %} planned{% if day.count > 0 %} done{% endif %}{% endif %}"
-                    onclick="openPlanPopup('{{ day.date_str }}', '{{ day.label or '' }}', {{ 'true' if day.planned else 'false' }})">
+                    role="gridcell" tabindex="{{ '0' if day.is_today else '-1' }}"
+                    data-date="{{ day.date_str }}" data-label="{{ day.label or '' }}" data-planned="{{ 'true' if day.planned else 'false' }}"
+                    aria-label="{{ day.day }}. {{ month_name }}{% if day.count > 0 %}, {{ day.count }} Sätze{% endif %}{% if day.planned %}, geplant{% if day.label %}: {{ day.label }}{% endif %}{% endif %}">
                   <div class="day-num">{{ day.day }}</div>
                   {% if day.count > 0 %}
                     <div class="day-count">{{ day.count }} Sätze</div>
@@ -240,9 +250,10 @@
 
   <!-- Plan Popup -->
   <div class="plan-overlay" id="planOverlay" onclick="closePlanPopup()"></div>
-  <div class="plan-popup" id="planPopup">
+  <div class="plan-popup" id="planPopup" role="dialog" aria-modal="true" aria-labelledby="planPopupTitle">
     <h5 id="planPopupTitle" class="mb-3"></h5>
     <form id="planForm" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="date" id="planDate">
       <div class="form-group">
         <label for="planLabel">Bezeichnung (optional)</label>
@@ -255,6 +266,8 @@
 
 {% block extra_scripts %}
   <script>
+    var _lastFocusedCell = null;
+
     function openPlanPopup(dateStr, label, isPlanned) {
       document.getElementById('planOverlay').style.display = 'block';
       document.getElementById('planPopup').style.display = 'block';
@@ -273,12 +286,134 @@
         btns += '<button type="submit" class="btn btn-primary btn-block" formaction="{{ url_for("plan_training_day") }}">Training planen</button>';
       }
       document.getElementById('planButtons').innerHTML = btns;
+      document.getElementById('planLabel').focus();
     }
 
     function closePlanPopup() {
       document.getElementById('planOverlay').style.display = 'none';
       document.getElementById('planPopup').style.display = 'none';
+      if (_lastFocusedCell) _lastFocusedCell.focus();
     }
+
+    /* --- Keyboard navigation for calendar grid --- */
+    (function() {
+      var table = document.querySelector('.calendar-table');
+      if (!table) return;
+
+      var dayCells = Array.from(table.querySelectorAll('td[data-date]'));
+      if (!dayCells.length) return;
+
+      // If no cell has tabindex="0" (no "today" in this month), make first day focusable
+      if (!dayCells.some(function(c) { return c.getAttribute('tabindex') === '0'; })) {
+        dayCells[0].setAttribute('tabindex', '0');
+      }
+
+      // Roving tabindex: click or focus sets this cell to 0, others to -1
+      function setRovingFocus(cell) {
+        dayCells.forEach(function(c) { c.setAttribute('tabindex', '-1'); });
+        cell.setAttribute('tabindex', '0');
+        cell.focus();
+      }
+
+      // Find cell position in grid
+      function getCellPos(cell) {
+        var row = cell.parentElement;
+        var rows = Array.from(table.querySelectorAll('tbody tr'));
+        var ri = rows.indexOf(row);
+        var ci = Array.from(row.children).indexOf(cell);
+        return { ri: ri, ci: ci };
+      }
+
+      // Find next focusable cell in direction
+      function navigate(cell, dRow, dCol) {
+        var pos = getCellPos(cell);
+        var rows = Array.from(table.querySelectorAll('tbody tr'));
+        var ri = pos.ri + dRow;
+        var ci = pos.ci + dCol;
+
+        while (ri >= 0 && ri < rows.length) {
+          var cols = rows[ri].children;
+          while (ci >= 0 && ci < 7) {
+            var target = cols[ci];
+            if (target && target.hasAttribute('data-date')) {
+              setRovingFocus(target);
+              return;
+            }
+            ci += dCol || (dRow > 0 ? 1 : -1);
+          }
+          ri += dRow || 0;
+          if (dCol > 0 || (dCol === 0 && dRow > 0)) ci = 0;
+          else ci = 6;
+          // Avoid infinite loop for pure left/right
+          if (dRow === 0) break;
+        }
+      }
+
+      // Click handler — delegate
+      table.addEventListener('click', function(e) {
+        var cell = e.target.closest('td[data-date]');
+        if (!cell) return;
+        _lastFocusedCell = cell;
+        setRovingFocus(cell);
+        openPlanPopup(cell.dataset.date, cell.dataset.label, cell.dataset.planned === 'true');
+      });
+
+      // Keyboard handler
+      table.addEventListener('keydown', function(e) {
+        var cell = e.target.closest('td[data-date]');
+        if (!cell) return;
+
+        switch (e.key) {
+          case 'ArrowRight':
+            e.preventDefault();
+            navigate(cell, 0, 1);
+            break;
+          case 'ArrowLeft':
+            e.preventDefault();
+            navigate(cell, 0, -1);
+            break;
+          case 'ArrowDown':
+            e.preventDefault();
+            navigate(cell, 1, 0);
+            break;
+          case 'ArrowUp':
+            e.preventDefault();
+            navigate(cell, -1, 0);
+            break;
+          case 'Home':
+            e.preventDefault();
+            setRovingFocus(dayCells[0]);
+            break;
+          case 'End':
+            e.preventDefault();
+            setRovingFocus(dayCells[dayCells.length - 1]);
+            break;
+          case 'Enter':
+          case ' ':
+            e.preventDefault();
+            _lastFocusedCell = cell;
+            openPlanPopup(cell.dataset.date, cell.dataset.label, cell.dataset.planned === 'true');
+            break;
+        }
+      });
+
+      /* --- Focus trap for popup --- */
+      document.getElementById('planPopup').addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+          var focusable = Array.from(this.querySelectorAll('input, button, [tabindex]:not([tabindex="-1"])'));
+          if (!focusable.length) return;
+          var first = focusable[0];
+          var last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      });
+    })();
 
     // ESC schließt Popup
     document.addEventListener('keydown', function(e) {

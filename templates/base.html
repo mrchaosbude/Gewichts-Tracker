@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <!-- PWA / Add to Home Screen -->
     <link rel="manifest" href="/static/manifest.json">
@@ -167,6 +168,8 @@
         padding: 2px 8px;
         border-radius: 4px;
         font-size: 0.9rem;
+        background: none;
+        border: none;
       }
       /* ---- Shared App Design System ---- */
       .page-wrap {
@@ -270,11 +273,106 @@
         .stat-row { gap: 1.25rem; margin-bottom: 1.25rem; }
         .section-label { font-size: 0.9rem; margin-bottom: 0.75rem; }
       }
+
+      /* Utility classes */
+      .fs-xxs { font-size: 0.65rem; }
+      .fs-xs { font-size: 0.7rem; }
+      .fs-sm { font-size: 0.8rem; }
+      .fs-base { font-size: 0.85rem; }
+      .fs-md { font-size: 0.9rem; }
+      .fs-lg { font-size: 1.2rem; }
+      .fs-xl { font-size: 1.3rem; }
+      .subtitle { font-size: 0.85rem; margin-top: -0.5rem; }
+      .stat-hint { font-size: 0.7rem; color: #6c757d; margin-top: 0.25rem; }
+      [data-theme="dark"] .stat-hint { color: var(--text-muted); }
+      .text-preline { white-space: pre-line; }
+      .form-inline-action { display: inline; }
+      .flex-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+      .flex-gap { display: flex; gap: 0.5rem; }
+      .rounded-lg { border-radius: 0.75rem; }
+      .page-wrap-narrow { max-width: 720px; }
+      .form-field-error { font-size: 0.8rem; }
+      .warmup-section { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c757d; }
+      [data-theme="dark"] .warmup-section { color: var(--text-muted); }
+      .table-compact { font-size: 0.85rem; }
+      .btn-action-xs { font-size: 0.7rem; }
+      .btn-action-sm { font-size: 0.75rem; }
+      .admin-card { font-size: 0.85rem; }
+      .admin-date { font-size: 0.75rem; }
+      .admin-info { font-size: 0.75rem; }
+      .offline-banner { background: #dc3545; color: #fff; text-align: center; padding: 6px 12px; font-size: 0.85rem; font-weight: 600; position: sticky; top: 0; z-index: 1100; }
+      .preview-title { font-weight: 700; font-size: 1rem; margin-bottom: 0.3rem; }
+      .preview-group { padding: 0.4rem 0; border-top: 2px solid #6c757d; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #495057; margin-top: 0.3rem; }
+      [data-theme="dark"] .preview-group { color: var(--text-muted); }
+      .preview-exercise { padding: 0.4rem 0; border-top: 1px solid rgba(0,0,0,0.06); font-size: 0.85rem; }
+      [data-theme="dark"] .preview-exercise { border-color: rgba(255,255,255,0.1); }
+      .preview-meta { font-size: 0.72rem; color: #6c757d; margin-top: 0.1rem; }
+      [data-theme="dark"] .preview-meta { color: var(--text-muted); }
+      .import-hint { font-size: 0.72rem; }
+      .import-format { white-space: pre-wrap; background: var(--pre-bg, rgba(0,0,0,0.04)); padding: 0.5rem; border-radius: 0.4rem; font-size: 0.75rem; }
+      .md-textarea { font-family: monospace; min-height: 200px; font-size: 0.85rem; }
+      .tpl-icon { width: 40px; height: 40px; border-radius: 0.6rem; background: linear-gradient(135deg, #007bff, #0056b3); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
+      .tpl-title { font-weight: 600; font-size: 0.95rem; }
+      .tpl-desc { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tpl-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+      .session-row { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.85rem; }
+      .session-row:not(:last-child) { border-bottom: 1px solid #eee; }
+      [data-theme="dark"] .session-row:not(:last-child) { border-bottom-color: var(--border-color); }
+      .session-main { font-size: 0.88rem; font-weight: 500; }
+      .session-time { color: #6c757d; font-weight: 400; font-size: 0.8rem; margin-left: 0.4rem; }
+      [data-theme="dark"] .session-time { color: var(--text-muted); }
+      .session-detail { font-size: 0.72rem; color: #6c757d; margin-top: 0.1rem; }
+      [data-theme="dark"] .session-detail { color: var(--text-muted); }
+      .session-notes { font-size: 0.75rem; color: #6c757d; margin-top: 0.15rem; }
+      [data-theme="dark"] .session-notes { color: var(--text-muted); }
+      .delete-form-inline { margin-left: 0.5rem; flex-shrink: 0; }
+      .btn-delete-sm { padding: 0.15rem 0.5rem; font-size: 0.85rem; border-radius: 0.5rem; }
+      .chart-container { position: relative; height: 140px; min-height: 140px; }
+      .login-divider { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee; }
+      [data-theme="dark"] .login-divider { border-color: var(--border-color); }
+      .share-row { margin-bottom: 0.4rem; }
+      .badge-cardio { font-size: 0.65rem; vertical-align: middle; padding: 0.1rem 0.4rem; }
+      .s-card-compact { padding: 0.75rem; }
+      .s-card-tight { padding: 0.7rem 1rem; margin-bottom: 1rem; }
+      .section-separator { border-top: 2px solid #6c757d; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #495057; font-size: 0.8rem; }
+      [data-theme="dark"] .section-separator { color: var(--text-muted); }
+      .photo-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center; cursor: pointer; }
     </style>
     {% block extra_head %}{% endblock %}
   </head>
   <body class="d-flex flex-column min-vh-100">
+    <div id="offline-banner" class="offline-banner" style="display:none;">
+      Keine Internetverbindung &mdash; Änderungen werden offline gespeichert
+    </div>
     <main id="main-content" class="flex-fill py-4">
+      <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Schließen">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        {% if form and form.errors %}
+          {% for field, errors in form.errors.items() %}
+            {% if field != 'csrf_token' %}
+              {% for error in errors %}
+                <div class="alert alert-danger alert-dismissible fade show py-2 fs-base" role="alert">
+                  <strong>{{ form[field].label.text }}:</strong> {{ error }}
+                  <button type="button" class="close" data-dismiss="alert" aria-label="Schließen">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
       {% block content %}{% endblock %}
     </main>
     <footer class="bg-light border-top py-3 mt-auto">
@@ -290,7 +388,7 @@
           {% else %}
             <span class="text-muted small">&copy; {{ app_name }}</span>
           {% endif %}
-          <span class="dark-mode-toggle text-muted small mx-2 my-1" id="darkModeToggle" title="Dark Mode umschalten">🌙</span>
+          <button type="button" class="dark-mode-toggle text-muted small mx-2 my-1" id="darkModeToggle" title="Dark Mode umschalten" aria-label="Dark Mode umschalten">🌙</button>
         </nav>
       </div>
     </footer>
@@ -346,6 +444,26 @@
             setTheme(e.matches ? 'dark' : 'light');
           }
         });
+      })();
+    </script>
+    <script src="/static/js/main.js"></script>
+    <script>
+      (function() {
+        function updateOfflineBanner() {
+          var banner = document.getElementById('offline-banner');
+          if (banner) banner.style.display = navigator.onLine ? 'none' : 'block';
+        }
+        updateOfflineBanner();
+        window.addEventListener('online', updateOfflineBanner);
+        window.addEventListener('offline', updateOfflineBanner);
+
+        // Clear SW cache on logout
+        if (document.cookie.indexOf('sw_clear_cache=1') !== -1) {
+          document.cookie = 'sw_clear_cache=; Max-Age=0; path=/';
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUTH_CACHE' });
+          }
+        }
       })();
     </script>
     {% block extra_scripts %}{% endblock %}

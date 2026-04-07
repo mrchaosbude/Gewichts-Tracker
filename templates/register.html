@@ -24,7 +24,7 @@
   <div class="register-wrap">
     <div class="register-header">
       <h2>Konto erstellen</h2>
-      <p class="text-muted" style="font-size:0.9rem;">Registriere dich, um loszulegen</p>
+      <p class="text-muted fs-md">Registriere dich, um loszulegen</p>
     </div>
     <div class="s-card">
       <form method="POST">
@@ -55,6 +55,6 @@
         {{ form.submit(class="btn btn-primary btn-block") }}
       </form>
     </div>
-    <p class="text-center mt-3" style="font-size:0.9rem;">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+    <p class="text-center mt-3 fs-md">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
   </div>
 {% endblock %}

@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import (
-    app, db, User, TrainingPlan, Exercise,
+    app as flask_app, db, User, TrainingPlan, Exercise,
     TemplateTrainingPlan, TemplateExercise,
     parse_training_plan_markdown
 )
@@ -245,40 +245,9 @@ Just a description.
         assert ex['description'] == 'Just a description.'
 
 
-@pytest.fixture
-def client():
-    """Set up test client with in-memory database."""
-    app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
-        WTF_CSRF_ENABLED=False,
-    )
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-        user = User(username='tester', password=generate_password_hash('secret'))
-        admin = User(username='admin', password=generate_password_hash('admin'), is_admin=True)
-        db.session.add(user)
-        db.session.add(admin)
-        db.session.commit()
+# --- Integration tests using conftest fixtures ---
 
-    with app.test_client() as test_client:
-        yield test_client
-
-
-def login(client, username, password):
-    """Helper to log in a user."""
-    return client.post('/login', data={
-        'username': username,
-        'password': password
-    }, follow_redirects=True)
-
-
-def test_import_creates_plan_and_exercises(client):
-    """Test that import creates a training plan with exercises."""
-    login(client, 'tester', 'secret')
-
-    markdown = """# Imported Plan
+SAMPLE_MARKDOWN = """# Imported Plan
 
 Test description
 
@@ -288,28 +257,46 @@ First exercise
 ## Exercise B
 Second exercise
 """
+
+
+@pytest.fixture()
+def md_users(app):
+    """Create users for markdown import tests."""
+    tester = User(username='tester', password=generate_password_hash('secret'), is_trainer=True)
+    regular = User(username='regular', password=generate_password_hash('regular'))
+    admin = User(username='mdadmin', password=generate_password_hash('admin'), is_admin=True)
+    db.session.add_all([tester, regular, admin])
+    db.session.commit()
+    return {'tester': tester, 'regular': regular, 'admin': admin}
+
+
+def _login(client, username, password):
+    """Helper to log in a user."""
+    return client.post('/login', data={
+        'username': username,
+        'password': password
+    }, follow_redirects=True)
+
+
+def test_import_creates_plan_and_exercises(app, client, md_users):
+    """Test that import creates a training plan with exercises."""
+    _login(client, 'tester', 'secret')
     response = client.post('/import_training_plan', data={
-        'markdown_content': markdown,
+        'markdown_content': SAMPLE_MARKDOWN,
         'action': 'import'
     }, follow_redirects=True)
     assert response.status_code == 200
-
-    with app.app_context():
-        plan = TrainingPlan.query.filter_by(title='Imported Plan').first()
-        assert plan is not None
-        assert plan.description == 'Test description'
-        assert len(plan.exercises) == 2
-
-        # Check exercises belong to the user
-        user = User.query.filter_by(username='tester').first()
-        for ex in plan.exercises:
-            assert ex.user_id == user.id
+    plan = TrainingPlan.query.filter_by(title='Imported Plan').first()
+    assert plan is not None
+    assert plan.description == 'Test description'
+    assert len(plan.exercises) == 2
+    for ex in plan.exercises:
+        assert ex.user_id == md_users['tester'].id
 
 
-def test_import_preview_does_not_create(client):
+def test_import_preview_does_not_create(app, client, md_users):
     """Test that preview action does not create any records."""
-    login(client, 'tester', 'secret')
-
+    _login(client, 'tester', 'secret')
     markdown = """# Preview Plan
 
 ## Exercise
@@ -321,17 +308,13 @@ Desc
     })
     assert response.status_code == 200
     assert b'Preview Plan' in response.data
-
-    with app.app_context():
-        plan = TrainingPlan.query.filter_by(title='Preview Plan').first()
-        assert plan is None
+    plan = TrainingPlan.query.filter_by(title='Preview Plan').first()
+    assert plan is None
 
 
-def test_import_validation_errors_shown(client):
+def test_import_validation_errors_shown(app, client, md_users):
     """Test that validation errors are shown to user."""
-    login(client, 'tester', 'secret')
-
-    # Missing title and exercises
+    _login(client, 'tester', 'secret')
     markdown = """Just some text without headers"""
     response = client.post('/import_training_plan', data={
         'markdown_content': markdown,
@@ -341,18 +324,16 @@ def test_import_validation_errors_shown(client):
     assert b'Kein Plantitel' in response.data or b'Keine' in response.data
 
 
-def test_template_import_requires_admin_or_trainer(client):
-    """Test that template import is protected."""
-    login(client, 'tester', 'secret')
-
+def test_template_import_requires_admin_or_trainer(app, client, md_users):
+    """Test that template import is protected for regular users."""
+    _login(client, 'regular', 'regular')
     response = client.get('/admin/template_plan/import')
     assert response.status_code == 403
 
 
-def test_admin_can_import_template(client):
+def test_admin_can_import_template(app, client, md_users):
     """Test that admin can import templates."""
-    login(client, 'admin', 'admin')
-
+    _login(client, 'mdadmin', 'admin')
     markdown = """# Template Plan
 
 Template description
@@ -365,48 +346,38 @@ Exercise in template
         'action': 'import'
     }, follow_redirects=True)
     assert response.status_code == 200
-
-    with app.app_context():
-        template = TemplateTrainingPlan.query.filter_by(title='Template Plan').first()
-        assert template is not None
-        assert len(template.exercises) == 1
-        assert template.exercises[0].name == 'Template Exercise'
+    template = TemplateTrainingPlan.query.filter_by(title='Template Plan').first()
+    assert template is not None
+    assert len(template.exercises) == 1
+    assert template.exercises[0].name == 'Template Exercise'
 
 
-def test_each_user_gets_own_exercises(client):
+def test_each_user_gets_own_exercises(app, client, md_users):
     """Test that each user importing gets their own exercise copies."""
-    # First user imports
-    login(client, 'tester', 'secret')
-
     markdown = """# Shared Style Plan
 
 ## Common Exercise
 Everyone gets their own copy
 """
+    # First user imports
+    _login(client, 'tester', 'secret')
     client.post('/import_training_plan', data={
         'markdown_content': markdown,
         'action': 'import'
     }, follow_redirects=True)
 
-    # Check first user's data
-    with app.app_context():
-        user1 = User.query.filter_by(username='tester').first()
-        plan1 = TrainingPlan.query.filter_by(user_id=user1.id, title='Shared Style Plan').first()
-        assert plan1 is not None
-        assert plan1.exercises[0].user_id == user1.id
+    plan1 = TrainingPlan.query.filter_by(user_id=md_users['tester'].id, title='Shared Style Plan').first()
+    assert plan1 is not None
+    assert plan1.exercises[0].user_id == md_users['tester'].id
 
     # Admin imports same plan
-    login(client, 'admin', 'admin')
+    _login(client, 'mdadmin', 'admin')
     client.post('/import_training_plan', data={
         'markdown_content': markdown,
         'action': 'import'
     }, follow_redirects=True)
 
-    with app.app_context():
-        user2 = User.query.filter_by(username='admin').first()
-        plan2 = TrainingPlan.query.filter_by(user_id=user2.id, title='Shared Style Plan').first()
-        assert plan2 is not None
-        assert plan2.exercises[0].user_id == user2.id
-
-        # Verify exercises are separate
-        assert plan1.exercises[0].id != plan2.exercises[0].id
+    plan2 = TrainingPlan.query.filter_by(user_id=md_users['admin'].id, title='Shared Style Plan').first()
+    assert plan2 is not None
+    assert plan2.exercises[0].user_id == md_users['admin'].id
+    assert plan1.exercises[0].id != plan2.exercises[0].id

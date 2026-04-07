@@ -3,10 +3,10 @@
 {% block title %}Admin – Benutzerübersicht{% endblock %}
 
 {% block content %}
-  <div class="page-wrap" style="max-width:720px;">
+  <div class="page-wrap page-wrap-narrow">
     <h2 class="page-title">Admin</h2>
 
-    <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+    <div class="flex-gap mb-3 flex-wrap">
       <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-secondary btn-sm">Einstellungen</a>
       <a href="{{ url_for('admin_footer_pages') }}" class="btn btn-outline-primary btn-sm">Footer-Seiten</a>
       <a href="{{ url_for('admin_footer_links') }}" class="btn btn-outline-primary btn-sm">Footer-Links</a>
@@ -15,34 +15,34 @@
 
     <div class="section-label">Benutzer ({{ users|length }})</div>
     {% for user in users %}
-    <div class="s-card" style="font-size:0.85rem;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+    <div class="s-card admin-card">
+      <div class="d-flex align-items-center justify-content-between mb-1">
         <div>
           <strong>{{ user.username }}</strong>
           {% if user.is_trainer %}<span class="badge badge-info ml-1">Trainer</span>{% endif %}
         </div>
-        <span class="text-muted" style="font-size:0.75rem;">{{ user.registration_date.strftime('%d.%m.%Y') }}</span>
+        <span class="text-muted admin-date">{{ user.registration_date.strftime('%d.%m.%Y') }}</span>
       </div>
-      <div class="text-muted mb-2" style="font-size:0.75rem;">
+      <div class="text-muted mb-2 admin-info">
         Letzter Login: {% if user.last_login %}{{ user.last_login.strftime('%d.%m.%Y %H:%M') }}{% else %}-{% endif %}
       </div>
-      <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+      <div class="flex-actions">
         {% if not user.is_trainer %}
-          <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+          <form action="{{ url_for('admin_set_trainer', user_id=user.id) }}" method="POST" class="form-inline-action">
             {{ set_trainer_form.hidden_tag() }}
-            {{ set_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0", value='Trainer setzen', style="font-size:0.7rem;") }}
+            {{ set_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0 btn-action-xs", value='Trainer setzen') }}
           </form>
         {% else %}
-          <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" style="display:inline;">
+          <form action="{{ url_for('admin_remove_trainer', user_id=user.id) }}" method="POST" class="form-inline-action">
             {{ remove_trainer_form.hidden_tag() }}
-            {{ remove_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0", value='Trainer entfernen', style="font-size:0.7rem;") }}
+            {{ remove_trainer_form.submit(class="btn btn-outline-secondary btn-sm py-0 btn-action-xs", value='Trainer entfernen') }}
           </form>
         {% endif %}
-        <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">Passwort</a>
+        <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-outline-primary btn-sm py-0 btn-action-xs">Passwort</a>
         {% if user.id != current_user.id %}
-          <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
+          <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Benutzer wirklich löschen?');">
             {{ delete_user_form.hidden_tag() }}
-            {{ delete_user_form.submit(class="btn btn-outline-danger btn-sm py-0", value='Löschen', style="font-size:0.7rem;") }}
+            {{ delete_user_form.submit(class="btn btn-outline-danger btn-sm py-0 btn-action-xs", value='Löschen') }}
           </form>
         {% endif %}
       </div>

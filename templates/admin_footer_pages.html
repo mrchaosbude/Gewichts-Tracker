@@ -22,18 +22,18 @@
     {% if pages %}
     <div class="section-label">Vorhandene Seiten ({{ pages|length }})</div>
     <div class="s-card s-card-flush">
-      <table class="table table-sm mb-0" style="font-size:0.85rem;">
+      <table class="table table-sm mb-0 table-compact">
         <thead><tr><th>Titel</th><th>Vorschau</th><th></th></tr></thead>
         <tbody>
           {% for page in pages %}
           <tr>
             <td><strong>{{ page.title }}</strong></td>
-            <td class="text-muted" style="font-size:0.8rem;">{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
-            <td class="text-right" style="white-space:nowrap;">
-              <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-outline-primary btn-sm py-0" style="font-size:0.7rem;">Edit</a>
-              <form action="{{ url_for('delete_footer_page', page_id=page.id) }}" method="POST" style="display:inline;">
+            <td class="text-muted fs-sm">{{ page.content[:30] }}{% if page.content|length > 30 %}...{% endif %}</td>
+            <td class="text-right text-nowrap">
+              <a href="{{ url_for('edit_footer_page', page_id=page.id) }}" class="btn btn-outline-primary btn-sm py-0 btn-action-xs">Edit</a>
+              <form action="{{ url_for('delete_footer_page', page_id=page.id) }}" method="POST" class="form-inline-action">
                 {{ delete_form.hidden_tag() }}
-                {{ delete_form.submit(class="btn btn-outline-danger btn-sm py-0", value='X', style="font-size:0.7rem;") }}
+                {{ delete_form.submit(class="btn btn-outline-danger btn-sm py-0 btn-action-xs", value='X') }}
               </form>
             </td>
           </tr>

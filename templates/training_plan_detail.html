@@ -336,7 +336,7 @@
 
     {# ---- Plan header ---- #}
     <div class="plan-header">
-      <h1 class="page-title" style="margin-bottom:0">{{ training_plan.title }}</h1>
+      <h1 class="page-title mb-0">{{ training_plan.title }}</h1>
       <form action="{{ url_for('delete_training_plan', training_plan_id=training_plan.id) }}" method="POST" onsubmit="return confirm('Trainingsplan wirklich löschen?');">
         {{ delete_plan_form.hidden_tag() }}
         <button type="submit" class="del-btn">Löschen</button>
@@ -353,18 +353,18 @@
     </div>
 
     {# ---- Share ---- #}
-    <div class="s-card" style="padding:0.7rem 1rem; margin-bottom:1rem;">
+    <div class="s-card s-card-tight">
       {% if training_plan.share_token %}
-        <div class="share-row" style="margin-bottom:0.4rem;">
+        <div class="share-row mb-1">
           <input type="text" readonly value="{{ request.url_root.rstrip('/') + url_for('copy_shared_plan', token=training_plan.share_token) }}" id="shareLink">
           <button type="button" class="sm-btn sm-btn-copy" onclick="navigator.clipboard.writeText(document.getElementById('shareLink').value); this.textContent='Kopiert!';">Link kopieren</button>
         </div>
-        <form action="{{ url_for('unshare_training_plan', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+        <form action="{{ url_for('unshare_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
           {{ delete_plan_form.hidden_tag() }}
           <button type="submit" class="sm-btn sm-btn-unshr">Teilen deaktivieren</button>
         </form>
       {% else %}
-        <form action="{{ url_for('share_training_plan', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+        <form action="{{ url_for('share_training_plan', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
           {{ delete_plan_form.hidden_tag() }}
           <button type="submit" class="sm-btn sm-btn-share">Plan teilen</button>
         </form>
@@ -400,7 +400,7 @@
                   <tr>
                     <td>
                       <strong>{{ item.exercise.name }}</strong>
-                      {% if is_cardio %}<span class="badge badge-warning" style="font-size:0.6rem;">Ausdauer</span>{% endif %}
+                      {% if is_cardio %}<span class="badge badge-warning fs-xxs">Ausdauer</span>{% endif %}
                       {% if item.exercise.description %}
                         <div class="small text-muted">{{ item.exercise.description }}</div>
                       {% endif %}
@@ -476,7 +476,7 @@
               <span class="separator-label">{{ item.exercise.name }}</span>
               <div class="ex-controls">
                 {% if not loop.first %}
-                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
                     {{ delete_plan_form.hidden_tag() }}
                     <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
                     <input type="hidden" name="direction" value="up">
@@ -484,14 +484,14 @@
                   </form>
                 {% endif %}
                 {% if not loop.last %}
-                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
                     {{ delete_plan_form.hidden_tag() }}
                     <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
                     <input type="hidden" name="direction" value="down">
                     <button type="submit" class="arrow-btn" title="Nach unten">&darr;</button>
                   </form>
                 {% endif %}
-                <form action="{{ url_for('delete_exercise', exercise_id=item.exercise.id) }}" method="POST" style="display:inline" onsubmit="return confirm('Trenner entfernen?');">
+                <form action="{{ url_for('delete_exercise', exercise_id=item.exercise.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Trenner entfernen?');">
                   {{ delete_plan_form.hidden_tag() }}
                   <button type="submit" class="del-sep-btn" title="Trenner entfernen">&times;</button>
                 </form>
@@ -504,10 +504,10 @@
 
             {# Top row: name + reorder arrows #}
             <div class="ex-top">
-              <div style="min-width:0">
+              <div class="flex-fill" style="min-width:0">
                 <span class="ex-name">{{ item.exercise.name }}</span>
                 {% if item.exercise.exercise_type == 'ausdauer' %}
-                  <span class="badge badge-warning" style="font-size:0.65rem; vertical-align:middle; padding:0.1rem 0.4rem;">Ausdauer</span>
+                  <span class="badge badge-warning badge-cardio">Ausdauer</span>
                 {% endif %}
                 {% if item.superset_group %}
                   <span class="badge-ss badge-ss-{{ item.superset_group % 5 }}">Superset {{ item.superset_group }}</span>
@@ -518,7 +518,7 @@
               </div>
               <div class="ex-controls">
                 {% if not loop.first %}
-                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
                     {{ delete_plan_form.hidden_tag() }}
                     <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
                     <input type="hidden" name="direction" value="up">
@@ -526,7 +526,7 @@
                   </form>
                 {% endif %}
                 {% if not loop.last %}
-                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" style="display:inline">
+                  <form action="{{ url_for('reorder_exercise', training_plan_id=training_plan.id) }}" method="POST" class="form-inline-action">
                     {{ delete_plan_form.hidden_tag() }}
                     <input type="hidden" name="exercise_id" value="{{ item.exercise.id }}">
                     <input type="hidden" name="direction" value="down">

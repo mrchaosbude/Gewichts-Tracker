@@ -24,7 +24,7 @@
   <div class="login-wrap">
     <div class="login-header">
       <h2>Willkommen zurück</h2>
-      <p class="text-muted" style="font-size:0.9rem;">Melde dich an, um fortzufahren</p>
+      <p class="text-muted fs-md">Melde dich an, um fortzufahren</p>
     </div>
     <div class="s-card">
       <form method="POST">
@@ -44,7 +44,7 @@
         {{ form.submit(class="btn btn-primary btn-block") }}
       </form>
       {% if show_resend %}
-      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+      <div class="login-divider">
         <form method="POST" action="{{ url_for('resend_confirmation') }}">
           <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
           <input type="hidden" name="username" value="{{ form.username.data or '' }}">
@@ -53,6 +53,6 @@
       </div>
       {% endif %}
     </div>
-    <p class="text-center mt-3" style="font-size:0.9rem;">Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
+    <p class="text-center mt-3 fs-md">Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
   </div>
 {% endblock %}

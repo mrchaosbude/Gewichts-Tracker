@@ -1,6 +1,8 @@
 import sqlite3
 
-DB_PATH = 'fitness.db'
+from migration_utils import resolve_db_path
+
+DB_PATH = resolve_db_path()
 
 # This simple script migrates the old Exercise table (with training_plan_id)
 # to the new global Exercise table with the plan_exercises association table.

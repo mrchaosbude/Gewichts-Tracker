@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import shutil
+import tempfile
 from contextlib import contextmanager
 from typing import Iterable, Set
 
@@ -109,7 +112,8 @@ def backfill_session_owners() -> int:
     return updates
 
 
-def run_migration(database_uri: str | None, dry_run: bool) -> None:
+def _run_migration_core(database_uri: str | None) -> None:
+    """Execute the actual migration DDL and backfill within an app context."""
     with application_context(database_uri):
         LOGGER.info("Running migrations")
         altered = False
@@ -168,15 +172,37 @@ def run_migration(database_uri: str | None, dry_run: bool) -> None:
             session_updates,
         )
 
-        if dry_run:
-            db.session.rollback()
-            LOGGER.info("Dry run complete; no changes committed")
-        else:
-            db.session.commit()
-            LOGGER.info(
-                "Migration finished successfully%s",
-                " (schema altered)" if altered else "",
-            )
+        db.session.commit()
+        LOGGER.info(
+            "Migration finished successfully%s",
+            " (schema altered)" if altered else "",
+        )
+
+
+def run_migration(database_uri: str | None, dry_run: bool) -> None:
+    if not dry_run:
+        _run_migration_core(database_uri)
+        return
+
+    # Dry-run: copy the database, run migrations on the copy, then discard it.
+    # This is necessary because SQLite auto-commits DDL statements, so a simple
+    # rollback cannot undo ALTER TABLE / CREATE TABLE operations.
+    src_uri = database_uri or app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    src_path = src_uri.replace("sqlite:///", "") if src_uri.startswith("sqlite:///") else None
+    if not src_path or not os.path.exists(src_path):
+        LOGGER.error("Dry-run requires an existing SQLite database file. URI: %s", src_uri)
+        return
+
+    tmp_dir = tempfile.mkdtemp(prefix="gewichts_dryrun_")
+    tmp_path = os.path.join(tmp_dir, os.path.basename(src_path))
+    try:
+        shutil.copy2(src_path, tmp_path)
+        tmp_uri = f"sqlite:///{tmp_path}"
+        LOGGER.info("Dry-run: running migrations on temporary copy %s", tmp_path)
+        _run_migration_core(tmp_uri)
+        LOGGER.info("Dry-run complete. Original database was NOT modified.")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:

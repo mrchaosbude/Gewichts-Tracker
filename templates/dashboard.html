@@ -130,6 +130,21 @@
       font-size: 0.9rem;
       flex-shrink: 0;
     }
+    .nav-icon-calendar   { background:#e8f4fd; color:#007bff; }
+    .nav-icon-stats      { background:#e8f8e8; color:#28a745; }
+    .nav-icon-weight     { background:#fff3e0; color:#fd7e14; }
+    .nav-icon-achievements { background:#fef3e2; color:#ffc107; }
+    .nav-icon-photos     { background:#f3e8fd; color:#6f42c1; }
+    .nav-icon-export     { background:#e8e8e8; color:#6c757d; }
+    .nav-icon-help       { background:#e8f4fd; color:#17a2b8; }
+
+    [data-theme="dark"] .nav-icon-calendar   { background:#1a3a5c; color:#4da3ff; }
+    [data-theme="dark"] .nav-icon-stats      { background:#1a3c1a; color:#5cd65c; }
+    [data-theme="dark"] .nav-icon-weight     { background:#3c2a0e; color:#ffad5c; }
+    [data-theme="dark"] .nav-icon-achievements { background:#3c3010; color:#ffd24d; }
+    [data-theme="dark"] .nav-icon-photos     { background:#2a1a3c; color:#a97ee8; }
+    [data-theme="dark"] .nav-icon-export     { background:#2a2a2a; color:#adb5bd; }
+    [data-theme="dark"] .nav-icon-help       { background:#1a3a5c; color:#4dcfe8; }
 
     .upcoming-item {
       display: flex;
@@ -230,7 +245,7 @@
 
     <!-- Deload Warning -->
     {% if deload_needed %}
-      <div class="alert alert-warning alert-dismissible fade show py-2 mb-3" role="alert" style="font-size:0.85rem;">
+      <div class="alert alert-warning alert-dismissible fade show py-2 mb-3 fs-base" role="alert">
         <strong>Deload empfohlen!</strong> {{ weeks_trained }} Wochen durchgehend trainiert. Zeit für eine leichtere Woche.
         <button type="button" class="close" data-dismiss="alert" aria-label="Schließen"><span aria-hidden="true">&times;</span></button>
       </div>
@@ -288,7 +303,7 @@
           <div class="plan-arrow">&rsaquo;</div>
         </a>
       {% else %}
-        <div class="text-muted text-center py-3" style="font-size:0.9rem;">Noch keine Trainingspläne erstellt.</div>
+        <div class="text-muted text-center py-3 fs-md">Noch keine Trainingspläne erstellt.</div>
       {% endfor %}
     </div>
     <div class="mt-2 mb-3">
@@ -303,31 +318,31 @@
     <div class="section-title">Tools</div>
     <div class="quick-nav">
       <a href="{{ url_for('training_calendar') }}">
-        <div class="nav-icon" style="background:#e8f4fd;color:#007bff;">&#128197;</div>
+        <div class="nav-icon nav-icon-calendar">&#128197;</div>
         Kalender
       </a>
       <a href="{{ url_for('statistics') }}">
-        <div class="nav-icon" style="background:#e8f8e8;color:#28a745;">&#128200;</div>
+        <div class="nav-icon nav-icon-stats">&#128200;</div>
         Statistiken
       </a>
       <a href="{{ url_for('body_weight') }}">
-        <div class="nav-icon" style="background:#fff3e0;color:#fd7e14;">&#9878;</div>
+        <div class="nav-icon nav-icon-weight">&#9878;</div>
         Gewicht
       </a>
       <a href="{{ url_for('achievements') }}">
-        <div class="nav-icon" style="background:#fef3e2;color:#ffc107;">&#127942;</div>
+        <div class="nav-icon nav-icon-achievements">&#127942;</div>
         Achievements
       </a>
       <a href="{{ url_for('progress_photos') }}">
-        <div class="nav-icon" style="background:#f3e8fd;color:#6f42c1;">&#128247;</div>
+        <div class="nav-icon nav-icon-photos">&#128247;</div>
         Fotos
       </a>
       <a href="{{ url_for('export_training_data') }}">
-        <div class="nav-icon" style="background:#e8e8e8;color:#6c757d;">&#128190;</div>
+        <div class="nav-icon nav-icon-export">&#128190;</div>
         Export
       </a>
       <a href="{{ url_for('hilfe') }}">
-        <div class="nav-icon" style="background:#e8f4fd;color:#17a2b8;">&#10068;</div>
+        <div class="nav-icon nav-icon-help">&#10068;</div>
         Hilfe
       </a>
     </div>
@@ -340,4 +355,14 @@
 
 {% block extra_scripts %}
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script>
+    // Pre-cache wichtige Seiten nach Login für Offline-Nutzung
+    if ('caches' in window && navigator.onLine) {
+      caches.open('fitness-app-cache-v8').then(function(cache) {
+        ['/dashboard', '/body_weight'].forEach(function(url) {
+          cache.add(url).catch(function() {});
+        });
+      });
+    }
+  </script>
 {% endblock %}

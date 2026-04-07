@@ -27,25 +27,25 @@
     {% if stats %}
     <div class="stat-row{% if stats.change is defined %} cols-4{% endif %}">
       <div class="stat-box blue">
-        <div class="val" style="font-size:1.3rem;">{{ stats.current }}</div>
+        <div class="val fs-xl">{{ stats.current }}</div>
         <div class="lbl">Aktuell (kg)</div>
       </div>
       <div class="stat-box green">
-        <div class="val" style="font-size:1.3rem;">{{ stats.avg }}</div>
+        <div class="val fs-xl">{{ stats.avg }}</div>
         <div class="lbl">Durchschnitt</div>
       </div>
       {% if stats.change is defined %}
       <div class="stat-box orange">
-        <div class="val" style="font-size:1.3rem;">{{ stats.min }}-{{ stats.max }}</div>
+        <div class="val fs-xl">{{ stats.min }}-{{ stats.max }}</div>
         <div class="lbl">Min / Max</div>
       </div>
       <div class="stat-box {% if stats.change < 0 %}green{% elif stats.change > 0 %}red{% else %}purple{% endif %}">
-        <div class="val" style="font-size:1.3rem;">{% if stats.change > 0 %}+{% endif %}{{ stats.change }}</div>
+        <div class="val fs-xl">{% if stats.change > 0 %}+{% endif %}{{ stats.change }}</div>
         <div class="lbl">Veränderung</div>
       </div>
       {% else %}
       <div class="stat-box orange">
-        <div class="val" style="font-size:1.3rem;">{{ stats.min }}-{{ stats.max }}</div>
+        <div class="val fs-xl">{{ stats.min }}-{{ stats.max }}</div>
         <div class="lbl">Min / Max</div>
       </div>
       {% endif %}
@@ -53,7 +53,7 @@
 
     {% if chart_data.labels|length > 1 %}
     <div class="s-card">
-      <div style="position:relative; height:140px; min-height:140px;">
+      <div class="chart-container">
         <canvas id="weightChart"></canvas>
       </div>
     </div>
@@ -64,7 +64,7 @@
     <div class="section-label mt-3">Alle Einträge ({{ entries|length }})</div>
     {% if entries %}
     <div class="s-card s-card-flush">
-      <table class="table table-sm mb-0" style="font-size:0.85rem;">
+      <table class="table table-sm mb-0 table-compact">
         <thead>
           <tr><th>Datum</th><th>Gewicht</th><th></th></tr>
         </thead>
@@ -74,9 +74,9 @@
             <td>{{ entry.timestamp.strftime('%d.%m.%Y') }}</td>
             <td><strong>{{ entry.weight }} kg</strong>{% if entry.notes %} <span class="text-muted">- {{ entry.notes }}</span>{% endif %}</td>
             <td class="text-right">
-              <form action="{{ url_for('delete_body_weight', entry_id=entry.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Eintrag löschen?');">
+              <form action="{{ url_for('delete_body_weight', entry_id=entry.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Eintrag löschen?');">
                 {{ delete_form.hidden_tag() }}
-                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.75rem;">&times;</button>
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1 btn-action-sm">&times;</button>
               </form>
             </td>
           </tr>
@@ -85,7 +85,7 @@
       </table>
     </div>
     {% else %}
-    <div class="s-card text-center text-muted" style="font-size:0.9rem;">Noch keine Einträge vorhanden.</div>
+    <div class="s-card text-center text-muted fs-md">Noch keine Einträge vorhanden.</div>
     {% endif %}
 
     <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
@@ -93,6 +93,32 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+(function() {
+  var form = document.querySelector('.s-card form[method="POST"]');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    if (navigator.onLine) return; // normal submit
+    e.preventDefault();
+    var weightInput = form.querySelector('input[name="weight"]');
+    var notesInput = form.querySelector('textarea[name="notes"]');
+    var weightVal = weightInput ? weightInput.value : '';
+    if (!weightVal || parseFloat(weightVal) < 20 || parseFloat(weightVal) > 500) {
+      alert('Bitte ein gültiges Gewicht eingeben (20-500 kg).');
+      return;
+    }
+    saveOfflineWeight({
+      weight: parseFloat(weightVal),
+      notes: (notesInput && notesInput.value) ? notesInput.value : null,
+      timestamp: new Date().toISOString()
+    }).then(function() {
+      alert('Offline gespeichert! Wird beim nächsten Online-Sein synchronisiert.');
+      if (weightInput) weightInput.value = '';
+      if (notesInput) notesInput.value = '';
+    });
+  });
+})();
+</script>
 {% if chart_data.labels|length > 1 %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>

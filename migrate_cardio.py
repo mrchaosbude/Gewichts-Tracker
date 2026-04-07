@@ -1,7 +1,8 @@
 import sqlite3
-import os
 
-DB_PATH = os.path.join('instance', 'fitness.db') if os.path.exists(os.path.join('instance', 'fitness.db')) else 'fitness.db'
+from migration_utils import resolve_db_path
+
+DB_PATH = resolve_db_path()
 
 
 def migrate(db_path=None):

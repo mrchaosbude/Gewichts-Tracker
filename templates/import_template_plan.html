@@ -6,9 +6,9 @@
 <div class="page-wrap">
     <h2 class="page-title">Template importieren</h2>
 
-    <div class="s-card mb-3" style="font-size:0.8rem;">
+    <div class="s-card mb-3 fs-sm">
         <div class="section-label mb-2">Format-Beispiel</div>
-        <pre class="mb-0" style="white-space:pre-wrap; background:var(--pre-bg, rgba(0,0,0,0.04)); padding:0.5rem; border-radius:0.4rem; font-size:0.75rem;"># Plantitel
+        <pre class="mb-0 import-format"># Plantitel
 
 Optionale Planbeschreibung (max. 300 Zeichen)
 
@@ -25,13 +25,13 @@ Muskelgruppe: Schultern
 ## Laufen
 Typ: ausdauer
 30 Minuten lockeres Joggen.</pre>
-        <div class="text-muted mt-1" style="font-size:0.72rem;">
+        <div class="text-muted mt-1 import-hint">
             <code>---Label</code> = Trenner/Abschnitt<br>
             <code>Muskelgruppe:</code> / <code>Typ:</code> (kraft/ausdauer) / <code>YouTube:</code> = optional pro Übung
         </div>
     </div>
 
-    <div class="alert alert-warning" style="border-radius:0.75rem; font-size:0.8rem;">
+    <div class="alert alert-warning rounded-lg fs-sm">
         <strong>Hinweis:</strong> Benutzer erhalten automatisch eigene Kopien aller Übungen.
     </div>
 
@@ -40,9 +40,9 @@ Typ: ausdauer
             {{ form.hidden_tag() }}
             <div class="form-group">
                 {{ form.markdown_content.label(class="small font-weight-bold") }}
-                {{ form.markdown_content(class="form-control", style="font-family: monospace; min-height: 200px; font-size:0.85rem;", rows="12", placeholder="# Mein Template\n\nBeschreibung...\n\n## Übung 1\nDetails zur Übung...") }}
+                {{ form.markdown_content(class="form-control md-textarea", rows="12", placeholder="# Mein Template\n\nBeschreibung...\n\n## Übung 1\nDetails zur Übung...") }}
             </div>
-            <div style="display:flex; gap:0.5rem;">
+            <div class="flex-gap">
                 <button type="submit" name="action" value="preview" class="btn btn-outline-secondary btn-block">Vorschau</button>
                 <button type="submit" name="action" value="import" class="btn btn-primary btn-block">Importieren</button>
             </div>
@@ -52,7 +52,7 @@ Typ: ausdauer
     {% if preview %}
     <div class="section-label mt-3">Vorschau</div>
     {% if preview.errors %}
-        <div class="alert alert-danger" style="border-radius:0.75rem; font-size:0.85rem;">
+        <div class="alert alert-danger rounded-lg fs-base">
             <strong>Fehler gefunden:</strong>
             <ul class="mb-0 mt-1">
             {% for error in preview.errors %}
@@ -64,28 +64,28 @@ Typ: ausdauer
 
     {% if preview.plan_title %}
         <div class="s-card">
-            <div style="font-weight:700; font-size:1rem; margin-bottom:0.3rem;">{{ preview.plan_title }}</div>
+            <div class="preview-title">{{ preview.plan_title }}</div>
             {% if preview.plan_description %}
-                <p class="text-muted" style="font-size:0.85rem;">{{ preview.plan_description }}</p>
+                <p class="text-muted fs-base">{{ preview.plan_description }}</p>
             {% endif %}
             <div class="section-label mb-2">Übungen ({{ preview.exercises|rejectattr('is_separator')|list|length }})</div>
             {% for ex in preview.exercises %}
             {% if ex.is_separator %}
-            <div style="padding:0.4rem 0; border-top:2px solid #6c757d; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#495057; margin-top:0.3rem;">
+            <div class="preview-group">
                 {{ ex.name }}
             </div>
             {% else %}
-            <div style="padding:0.4rem 0; border-top:1px solid rgba(0,0,0,0.06); font-size:0.85rem;">
+            <div class="preview-exercise">
                 <strong>{{ ex.name }}</strong>
                 {% if ex.muscle_group or ex.exercise_type or ex.video_url %}
-                <div style="font-size:0.72rem; color:#6c757d; margin-top:0.1rem;">
-                    {% if ex.muscle_group %}<span class="badge badge-secondary" style="font-weight:500;">{{ ex.muscle_group }}</span> {% endif %}
-                    {% if ex.exercise_type %}<span class="badge badge-info" style="font-weight:500;">{{ ex.exercise_type }}</span> {% endif %}
-                    {% if ex.video_url %}<a href="{{ ex.video_url }}" target="_blank" style="font-size:0.72rem;">YouTube</a>{% endif %}
+                <div class="preview-meta">
+                    {% if ex.muscle_group %}<span class="badge badge-secondary font-weight-medium">{{ ex.muscle_group }}</span> {% endif %}
+                    {% if ex.exercise_type %}<span class="badge badge-info font-weight-medium">{{ ex.exercise_type }}</span> {% endif %}
+                    {% if ex.video_url %}<a href="{{ ex.video_url }}" target="_blank" class="import-hint">YouTube</a>{% endif %}
                 </div>
                 {% endif %}
                 {% if ex.description %}
-                    <div class="text-muted" style="white-space:pre-line; font-size:0.8rem;">{{ ex.description }}</div>
+                    <div class="text-muted text-preline fs-sm">{{ ex.description }}</div>
                 {% endif %}
             </div>
             {% endif %}
