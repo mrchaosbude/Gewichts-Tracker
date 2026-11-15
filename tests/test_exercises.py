@@ -28,7 +28,7 @@ class TestExerciseDetail:
     def test_exercise_detail_other_user(self, client, admin_user, sample_plan):
         exercise = sample_plan.exercises[0]
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.get(f'/exercise/{exercise.id}/detail')
         assert resp.status_code == 403
 
@@ -100,6 +100,6 @@ class TestDeleteSession:
         exercise = sample_plan.exercises[0]
         session = ExerciseSession.query.filter_by(exercise_id=exercise.id).first()
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.post(f'/session/{session.id}/delete')
         assert resp.status_code == 403

@@ -24,7 +24,7 @@ PNG_BYTES = b'\x89PNG\r\n\x1a\n' + b'\x00' * 32
 
 def _login(client, user):
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(user.id)
+        sess['_user_id'] = user.get_id()
     # Die app-Fixture hält einen App-Kontext offen; Flask-Login cached den User in g.
     g.pop('_login_user', None)
 

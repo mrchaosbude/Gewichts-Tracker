@@ -135,7 +135,7 @@ class TestApiTrainingPlans:
 
     def test_plan_other_user(self, client, admin_user, sample_plan):
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.get(f'/api/training_plans/{sample_plan.id}/detail')
         assert resp.status_code == 403
 

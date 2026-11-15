@@ -168,6 +168,17 @@ Authentifizierung erfolgt über Session-Cookies (`POST /api/login`).
 |---------|------|-------------|
 | `GET` | `/api/export` | Alle Trainingsdaten + Körpergewicht als JSON exportieren |
 
+## Konto und Passwort
+
+- Unter **Konto** (Dashboard) ändert jeder Benutzer sein Passwort und hinterlegt eine E-Mail-Adresse.
+- **Passwort vergessen** (Login-Seite) schickt einen Link an die hinterlegte Adresse. Er ist 1 Stunde gültig und nur einmal verwendbar. Voraussetzung: SMTP ist im Admin-Bereich eingerichtet.
+- Jede Passwortänderung (selbst, per Link oder durch den Admin) meldet alle anderen Sitzungen dieses Benutzers ab.
+- API: `POST /api/account/password` (JSON: `current_password`, `new_password`).
+
+Hinweis zum Update: Nach dem Einspielen dieser Version müssen sich alle Benutzer einmal neu einloggen.
+
+Die weitere Planung steht in [ROADMAP.md](ROADMAP.md).
+
 ## Update einer bestehenden Installation
 
 Nach jedem Update des Codes einmal den Update-Assistenten ausführen (App vorher stoppen):

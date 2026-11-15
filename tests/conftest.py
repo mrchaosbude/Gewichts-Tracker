@@ -61,7 +61,7 @@ def trainer_user(app):
 def logged_in_client(client, regular_user):
     """Client logged in as regular user."""
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(regular_user.id)
+        sess['_user_id'] = regular_user.get_id()
     return client
 
 
@@ -69,7 +69,7 @@ def logged_in_client(client, regular_user):
 def admin_client(client, admin_user):
     """Client logged in as admin."""
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(admin_user.id)
+        sess['_user_id'] = admin_user.get_id()
     return client
 
 
@@ -77,7 +77,7 @@ def admin_client(client, admin_user):
 def trainer_client(client, trainer_user):
     """Client logged in as trainer."""
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(trainer_user.id)
+        sess['_user_id'] = trainer_user.get_id()
     return client
 
 
