@@ -37,9 +37,9 @@
     {% if exercise.description %}
       <p class="text-center text-muted subtitle mb-3">{{ exercise.description }}</p>
     {% endif %}
-    {% if exercise.video_url %}
+    {% if exercise.video_url|safe_url %}
       <p class="text-center mb-3">
-        <a href="{{ exercise.video_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-info btn-sm">
+        <a href="{{ exercise.video_url|safe_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-info btn-sm">
           Video/Anleitung ansehen
         </a>
       </p>

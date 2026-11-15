@@ -338,7 +338,7 @@
         <a href="{{ url_for('view_footer_page', page_id=page.id) }}" style="color: rgba(255,255,255,0.7); margin: 0 0.5rem;">{{ page.title }}</a>
       {% endfor %}
       {% for link in footer_links %}
-        <a href="{{ link.url }}" style="color: rgba(255,255,255,0.7); margin: 0 0.5rem;">{{ link.title }}</a>
+        <a href="{{ link.url|safe_url or '#' }}" style="color: rgba(255,255,255,0.7); margin: 0 0.5rem;">{{ link.title }}</a>
       {% endfor %}
       <span style="display:block; margin-top:0.5rem;">&copy; {{ app_name }}</span>
     </div>

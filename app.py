@@ -34,12 +34,18 @@ import secrets
 import smtplib
 import hashlib
 import base64
+import html
+import shutil
 from cryptography.fernet import Fernet, InvalidToken
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import calendar as cal_module
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from env_config import load_env_file
+
+# Werte aus .env laden (z.B. von update.py erzeugter SECRET_KEY); echte Umgebungsvariablen haben Vorrang
+load_env_file()
 
 def _utcnow():
     """Current UTC time as naive datetime (compatible with SQLite which strips tzinfo)."""
@@ -49,6 +55,15 @@ def _utcnow():
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('GEWICHTS_TRACKER_DATABASE_URI', 'sqlite:///fitness.db')
+
+# Cookie-Härtung. SESSION_COOKIE_SECURE=true setzen, sobald die App über HTTPS läuft.
+_cookie_secure = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = _cookie_secure
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+app.config['REMEMBER_COOKIE_SECURE'] = _cookie_secure
 
 # reCAPTCHA-Konfiguration (ersetze die Schlüssel durch deine echten Werte)
 app.config['RECAPTCHA_PUBLIC_KEY'] = 'dein_recaptcha_public_key'
@@ -79,6 +94,36 @@ def decrypt_value(encrypted):
         return _get_fernet().decrypt(encrypted.encode()).decode()
     except (InvalidToken, Exception):
         return encrypted
+
+
+def sanitize_external_url(value, *, allow_relative=False, max_length=500):
+    """Return ``value`` if it is a plain http(s) URL, otherwise ``None``.
+
+    Blockt ``javascript:``, ``data:`` & Co., die sonst als klickbarer Link
+    (href) im Browser des Opfers Skripte ausführen würden.
+    """
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or len(value) > max_length:
+        return None
+    if any(ord(ch) <= 0x20 or ord(ch) == 0x7f for ch in value):
+        return None
+    if allow_relative and value.startswith('/') and not value.startswith('//') and '\\' not in value:
+        return value
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in ('http', 'https') or not parsed.netloc:
+        return None
+    return value
+
+
+@app.template_filter('safe_url')
+def _safe_url_filter(value):
+    """Jinja-Filter: nur http(s)-URLs bzw. lokale Pfade durchlassen, sonst leer."""
+    return sanitize_external_url(value, allow_relative=True) or ''
 
 
 def _ensure_database_setup_once() -> None:
@@ -341,13 +386,14 @@ def send_verification_email(user):
     if not settings.smtp_server or not settings.smtp_sender_email:
         return False
 
-    confirm_url = url_for('confirm_email', token=user.email_token, _external=True)
+    confirm_url = html.escape(url_for('confirm_email', token=user.email_token, _external=True), quote=True)
     app_name = settings.app_name or 'Gewichts-Tracker'
+    app_name_html = html.escape(app_name)
 
     html_body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #007bff;">{app_name}</h2>
-        <p>Hallo <strong>{user.username}</strong>,</p>
+        <h2 style="color: #007bff;">{app_name_html}</h2>
+        <p>Hallo <strong>{html.escape(user.username)}</strong>,</p>
         <p>bitte bestätige deine E-Mail-Adresse, indem du auf den folgenden Link klickst:</p>
         <p style="text-align: center; margin: 30px 0;">
             <a href="{confirm_url}"
@@ -405,7 +451,7 @@ def cleanup_unverified_accounts():
     ).all()
     for u in expired_users:
         app.logger.info('Deleting unverified account: %s (registered %s)', u.username, u.registration_date)
-        db.session.delete(u)
+        delete_user_with_data(u)
     if expired_users:
         db.session.commit()
 
@@ -418,6 +464,9 @@ def set_cache_headers(response):
     """Prevent SW from caching authenticated HTML pages."""
     if current_user.is_authenticated and response.content_type and 'text/html' in response.content_type:
         response.headers['Cache-Control'] = 'no-store'
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'same-origin')
     return response
 
 
@@ -442,14 +491,104 @@ class ProgressPhoto(db.Model):
 
 
 # Upload-Konfiguration
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads', 'photos')
+# Fortschrittsfotos liegen bewusst NICHT unter static/, da dort alles ohne Login
+# abrufbar ist. Ausgeliefert werden sie nur über progress_photo_file() an den Besitzer.
+LEGACY_UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads', 'photos')
+UPLOAD_FOLDER = (
+    os.environ.get('GEWICHTS_TRACKER_UPLOAD_FOLDER')
+    or os.path.join(app.instance_path, 'uploads', 'photos')
+)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+PHOTO_MIMETYPES = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'webp': 'image/webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB max
 
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _detect_image_extension(header: bytes):
+    """Return the real image type based on magic bytes, or None."""
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'png'
+    if header.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+    if header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+        return 'webp'
+    return None
+
+
+def save_progress_photo_file(file, user_id):
+    """Validate and store an uploaded photo. Returns the stored filename.
+
+    Raises ValueError if the content is not a PNG/JPEG/WebP image.
+    """
+    header = file.stream.read(16)
+    file.stream.seek(0)
+    ext = _detect_image_extension(header)
+    if ext is None:
+        raise ValueError('Datei ist kein gültiges Bild (PNG, JPG, WebP).')
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    filename = f'{int(user_id)}_{uuid.uuid4().hex}.{ext}'
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return filename
+
+
+def progress_photo_path(photo):
+    """Absolute path of a stored photo (basename only, no traversal)."""
+    return os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(photo.filename or ''))
+
+
+def remove_progress_photo_file(photo):
+    path = progress_photo_path(photo)
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except OSError as exc:  # pragma: no cover - defensive logging
+        app.logger.warning('Could not remove photo %s: %s', path, exc)
+
+
+def migrate_legacy_photo_uploads(legacy_folder=None, target_folder=None):
+    """Move photos out of the publicly served static/ folder. Returns count moved."""
+    legacy_folder = legacy_folder or LEGACY_UPLOAD_FOLDER
+    target_folder = target_folder or app.config['UPLOAD_FOLDER']
+    if not os.path.isdir(legacy_folder):
+        return 0
+    if os.path.abspath(legacy_folder) == os.path.abspath(target_folder):
+        return 0
+    moved = 0
+    for name in os.listdir(legacy_folder):
+        src = os.path.join(legacy_folder, name)
+        if not os.path.isfile(src) or not allowed_file(name):
+            continue
+        dst = os.path.join(target_folder, name)
+        try:
+            os.makedirs(target_folder, exist_ok=True)
+            if not os.path.exists(dst):
+                shutil.move(src, dst)
+                moved += 1
+        except OSError as exc:  # pragma: no cover - defensive logging
+            app.logger.warning('Could not move legacy photo %s: %s', src, exc)
+    if moved:
+        app.logger.warning('Moved %d progress photo(s) from %s to private folder %s', moved, legacy_folder, target_folder)
+    return moved
+
+
+def delete_user_with_data(user):
+    """Delete a user including personal data that is only linked via user_id.
+
+    Ohne das bleiben Fotos, Körpergewichte und Sessions als Waisen zurück und
+    würden einem später neu registrierten Benutzer mit derselben (von SQLite
+    wiederverwendeten) ID zugeordnet.
+    """
+    for photo in ProgressPhoto.query.filter_by(user_id=user.id).all():
+        remove_progress_photo_file(photo)
+        db.session.delete(photo)
+    BodyWeight.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    PlannedTraining.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    ExerciseSession.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    db.session.delete(user)
 
 
 @app.context_processor
@@ -612,14 +751,13 @@ class FooterLinkForm(FlaskForm):
 
     @staticmethod
     def _is_valid_absolute_url(url: str) -> bool:
-        parsed = urlparse(url)
-        return bool(parsed.scheme and parsed.netloc)
+        return sanitize_external_url(url) is not None
 
     def validate_url(self, field):  # noqa: D401 - Flask-WTF convention
         """Allow absolute URLs or relative paths starting with '/'."""
 
         value = (field.data or "").strip()
-        if value.startswith('/'):
+        if sanitize_external_url(value, allow_relative=True) is not None:
             return
         if not self._is_valid_absolute_url(value):
             raise ValidationError(
@@ -720,13 +858,17 @@ def parse_training_plan_markdown(content: str) -> dict:
             desc = '\n'.join(current_exercise_desc_lines).strip()
             if len(desc) > 300:
                 errors.append(f"Übung '{current_exercise}': Beschreibung zu lang ({len(desc)}/300 Zeichen). Wird abgeschnitten.")
+            video_url = current_exercise_meta.get('youtube', '')
+            if video_url and sanitize_external_url(video_url) is None:
+                errors.append(f"Übung '{current_exercise}': Ungültige Video-URL (nur http/https erlaubt).")
+                video_url = ''
             ex_entry = {
                 'name': current_exercise,
                 'description': desc[:300],
                 'is_separator': False,
                 'muscle_group': current_exercise_meta.get('muskelgruppe', ''),
                 'exercise_type': current_exercise_meta.get('typ', ''),
-                'video_url': current_exercise_meta.get('youtube', ''),
+                'video_url': video_url,
             }
             exercises.append(ex_entry)
             current_exercise = None
@@ -1203,6 +1345,7 @@ def confirm_email(token):
 
 
 @app.route('/resend-confirmation', methods=['POST'])
+@limiter.limit("5 per minute")
 def resend_confirmation():
     username = request.form.get('username', '').strip()
     user = User.query.filter_by(username=username).first()
@@ -1519,11 +1662,11 @@ def progress_photos():
             except ValueError as exc:
                 flash(str(exc), 'danger')
                 return redirect(url_for('progress_photos'))
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            ext = file.filename.rsplit('.', 1)[1].lower()
-            filename = f'{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}'
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            try:
+                filename = save_progress_photo_file(file, current_user.id)
+            except ValueError as exc:
+                flash(str(exc), 'danger')
+                return redirect(url_for('progress_photos'))
             notes = request.form.get('notes', '').strip() or None
             photo = ProgressPhoto(
                 user_id=current_user.id,
@@ -1555,13 +1698,28 @@ def delete_progress_photo(photo_id):
     photo = ProgressPhoto.query.get_or_404(photo_id)
     if photo.user_id != current_user.id:
         abort(403)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-    if os.path.exists(filepath):
-        os.remove(filepath)
+    remove_progress_photo_file(photo)
     db.session.delete(photo)
     db.session.commit()
     flash('Foto gelöscht.', 'info')
     return redirect(url_for('progress_photos'))
+
+
+@app.route('/progress_photos/<int:photo_id>/file')
+@login_required
+def progress_photo_file(photo_id):
+    """Serve a progress photo to its owner only."""
+    photo = db.session.get(ProgressPhoto, photo_id)
+    # 404 statt 403, damit fremde Foto-IDs nicht erkennbar sind
+    if photo is None or photo.user_id != current_user.id:
+        abort(404)
+    path = progress_photo_path(photo)
+    if not os.path.isfile(path):
+        abort(404)
+    ext = path.rsplit('.', 1)[-1].lower()
+    response = make_response(send_file(path, mimetype=PHOTO_MIMETYPES.get(ext, 'application/octet-stream')))
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 # ----------------------------------------------------
@@ -1811,7 +1969,7 @@ def import_training_plan():
                 is_separator=ex_data.get('is_separator', False),
                 muscle_group=ex_data.get('muscle_group') or None,
                 exercise_type=ex_data.get('exercise_type') or 'kraft',
-                video_url=ex_data.get('video_url') or None,
+                video_url=sanitize_external_url(ex_data.get('video_url')),
                 user_id=current_user.id
             )
             db.session.add(exercise)
@@ -2043,7 +2201,7 @@ def copy_shared_plan(token):
         new_exercise = Exercise(
             name=exercise.name,
             description=exercise.description,
-            video_url=exercise.video_url,
+            video_url=sanitize_external_url(exercise.video_url),
             muscle_group=exercise.muscle_group,
             is_separator=exercise.is_separator,
             exercise_type=exercise.exercise_type,
@@ -2153,10 +2311,15 @@ def add_exercise_to_plan(training_plan_id):
                         flash('Bitte einen Übungsnamen eingeben.', 'danger')
                         return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan,
                                                existing_exercises=existing_exercises, cardio_exercises=CARDIO_EXERCISES)
+                    video_url = (form.video_url.data or '').strip()
+                    if video_url and sanitize_external_url(video_url) is None:
+                        flash('Ungültige Video-URL. Erlaubt sind nur Links mit http:// oder https://.', 'danger')
+                        return render_template('add_exercise_to_plan.html', form=form, training_plan=training_plan,
+                                               existing_exercises=existing_exercises, cardio_exercises=CARDIO_EXERCISES)
                     exercise = Exercise(
                         name=form.name.data,
                         description=form.description.data,
-                        video_url=form.video_url.data or None,
+                        video_url=video_url or None,
                         muscle_group=form.muscle_group.data or None,
                         exercise_type='kraft',
                         user_id=current_user.id,
@@ -2565,8 +2728,8 @@ def admin_test_email():
     msg['Subject'] = f'{app_name} – Test-E-Mail'
     msg['From'] = settings.smtp_sender_email
     msg['To'] = test_to
-    html = f'<p>Dies ist eine Test-E-Mail von <strong>{app_name}</strong>. Die SMTP-Konfiguration funktioniert!</p>'
-    msg.attach(MIMEText(html, 'html'))
+    test_html = f'<p>Dies ist eine Test-E-Mail von <strong>{html.escape(app_name)}</strong>. Die SMTP-Konfiguration funktioniert!</p>'
+    msg.attach(MIMEText(test_html, 'html'))
     try:
         server = _smtp_connect(settings)
         server.sendmail(settings.smtp_sender_email, test_to, msg.as_string())
@@ -2605,11 +2768,11 @@ def admin_broadcast_email():
                     msg['To'] = user.email
                     html_body = f"""
                     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
-                        <h2 style="color: #007bff;">{app_name}</h2>
-                        <p>Hallo <strong>{user.username}</strong>,</p>
+                        <h2 style="color: #007bff;">{html.escape(app_name)}</h2>
+                        <p>Hallo <strong>{html.escape(user.username)}</strong>,</p>
                         <div>{form.message.data}</div>
                         <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;">
-                        <p style="font-size: 0.8rem; color: #999;">{app_name}</p>
+                        <p style="font-size: 0.8rem; color: #999;">{html.escape(app_name)}</p>
                     </div>
                     """
                     msg.attach(MIMEText(html_body, 'html'))
@@ -2652,9 +2815,10 @@ def admin_delete_user(user_id):
         return redirect(url_for('admin_overview'))
     form = DeleteUserForm()
     if form.validate_on_submit():
-        db.session.delete(user)
+        username = user.username
+        delete_user_with_data(user)
         db.session.commit()
-        flash(f'Benutzer {user.username} gelöscht!', 'info')
+        flash(f'Benutzer {username} gelöscht!', 'info')
         return redirect(url_for('admin_overview'))
     abort(400)
 
@@ -2996,6 +3160,7 @@ def add_template_to_account(template_plan_id):
 # ----------------------------------------------------
 
 @api_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def api_register():
     data, error_response, status_code = _get_json_payload()
     if error_response is not None:
@@ -3004,6 +3169,10 @@ def api_register():
     password = data.get('password')
     if not username or not password:
         return jsonify({'error': 'username and password required'}), 400
+    if not isinstance(username, str) or not isinstance(password, str):
+        return jsonify({'error': 'username and password must be strings'}), 400
+    if data.get('email') is not None and not isinstance(data.get('email'), str):
+        return jsonify({'error': 'email must be a string'}), 400
     if len(password) < 8:
         return jsonify({'error': 'password must be at least 8 characters'}), 400
     if len(username) < 3 or len(username) > 150:
@@ -3040,12 +3209,15 @@ def api_register():
 
 
 @api_bp.route('/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def api_login():
     data, error_response, status_code = _get_json_payload()
     if error_response is not None:
         return error_response, status_code
     username = data.get('username')
     password = data.get('password')
+    if not isinstance(username, str) or not isinstance(password, str):
+        return jsonify({'error': 'invalid credentials'}), 401
     user = User.query.filter_by(username=username).first()
     if user and check_password_hash(user.password, password):
         settings = get_app_settings()
@@ -3475,7 +3647,7 @@ def api_get_progress_photos():
     return jsonify([{
         'id': p.id,
         'filename': p.filename,
-        'url': f'/static/uploads/photos/{p.filename}',
+        'url': url_for('progress_photo_file', photo_id=p.id),
         'timestamp': p.timestamp.isoformat() if p.timestamp else None,
         'notes': p.notes,
         'body_weight': p.body_weight,
@@ -3496,11 +3668,10 @@ def api_upload_progress_photo():
         body_weight_val = _parse_optional_body_weight(request.form.get('body_weight', ''))
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    filename = f'{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}'
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
+    try:
+        filename = save_progress_photo_file(file, current_user.id)
+    except ValueError:
+        return jsonify({'error': 'file content is not a valid png, jpg or webp image'}), 400
     notes = request.form.get('notes', '').strip() or None
     photo = ProgressPhoto(
         user_id=current_user.id,
@@ -3513,7 +3684,7 @@ def api_upload_progress_photo():
     return jsonify({
         'id': photo.id,
         'filename': photo.filename,
-        'url': f'/static/uploads/photos/{photo.filename}',
+        'url': url_for('progress_photo_file', photo_id=photo.id),
         'timestamp': photo.timestamp.isoformat(),
     }), 201
 
@@ -3524,9 +3695,7 @@ def api_delete_progress_photo(photo_id):
     photo = ProgressPhoto.query.get_or_404(photo_id)
     if photo.user_id != current_user.id:
         abort(403)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-    if os.path.exists(filepath):
-        os.remove(filepath)
+    remove_progress_photo_file(photo)
     db.session.delete(photo)
     db.session.commit()
     return jsonify({'message': 'photo deleted'})
@@ -3880,7 +4049,7 @@ def api_copy_shared_plan(token):
         new_exercise = Exercise(
             name=exercise.name,
             description=exercise.description,
-            video_url=exercise.video_url,
+            video_url=sanitize_external_url(exercise.video_url),
             muscle_group=exercise.muscle_group,
             exercise_type=exercise.exercise_type,
             is_separator=exercise.is_separator,
@@ -4180,6 +4349,11 @@ def export_training_data():
     return response
 
 _ensure_database_setup_once()
+if not os.environ.get('GEWICHTS_TRACKER_NO_AUTO_MIGRATE'):  # update.py steuert das selbst
+    try:
+        migrate_legacy_photo_uploads()
+    except Exception as exc:  # pragma: no cover - defensive logging
+        app.logger.warning('Legacy photo migration failed: %s', exc)
 
 
 if hasattr(app, 'before_first_request'):

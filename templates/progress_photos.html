@@ -76,7 +76,7 @@
     <div class="photo-grid">
       {% for photo in photos %}
       <div class="photo-card">
-        <img src="{{ url_for('static', filename='uploads/photos/' + photo.filename) }}" alt="Fortschrittsfoto" onclick="document.getElementById('modal-img-{{ photo.id }}').style.display='flex'">
+        <img src="{{ url_for('progress_photo_file', photo_id=photo.id) }}" alt="Fortschrittsfoto" onclick="document.getElementById('modal-img-{{ photo.id }}').style.display='flex'">
         <div class="photo-info">
           <strong>{{ photo.timestamp.strftime('%d.%m.%Y') }}</strong>
           {% if photo.body_weight %}<span class="text-muted"> {{ photo.body_weight }}kg</span>{% endif %}
@@ -87,7 +87,7 @@
           </form>
         </div>
         <div id="modal-img-{{ photo.id }}" class="photo-modal" style="display:none;" onclick="this.style.display='none'">
-          <img src="{{ url_for('static', filename='uploads/photos/' + photo.filename) }}" class="photo-modal-img">
+          <img src="{{ url_for('progress_photo_file', photo_id=photo.id) }}" class="photo-modal-img">
         </div>
       </div>
       {% endfor %}
