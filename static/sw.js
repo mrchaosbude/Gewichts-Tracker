@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fitness-app-cache-v9';
+const CACHE_NAME = 'fitness-app-cache-v10';
 
 // Only pre-cache assets that don't require authentication
 const STATIC_ASSETS = [
@@ -55,7 +55,11 @@ self.addEventListener('fetch', event => {
       caches.match(event.request).then(cachedResponse => {
         if (cachedResponse) return cachedResponse;
         return fetch(event.request).then(response => {
-          if (response.ok) {
+          // Never store private responses (API data, progress photos)
+          const cacheControl = response.headers.get('Cache-Control') || '';
+          const isPrivate = cacheControl.includes('no-store') || cacheControl.includes('private')
+            || url.pathname.startsWith('/api/');
+          if (response.ok && !isPrivate) {
             const respClone = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, respClone));
           }

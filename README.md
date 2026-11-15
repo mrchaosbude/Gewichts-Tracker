@@ -42,6 +42,11 @@ Die App wird über Umgebungsvariablen konfiguriert:
 | `SECRET_KEY` | Geheimer Schlüssel für Sessions, CSRF und SMTP-Passwort-Verschlüsselung | **Ja** |
 | `FLASK_DEBUG` | Debug-Modus aktivieren (`true`/`false`, Standard: `false`) | Nein |
 | `GEWICHTS_TRACKER_DATABASE_URI` | Datenbank-URI (Standard: `sqlite:///fitness.db`) | Nein |
+| `GEWICHTS_TRACKER_UPLOAD_FOLDER` | Ablageort der Fortschrittsfotos (Standard: `instance/uploads/photos`). Darf **nicht** vom Webserver direkt ausgeliefert werden. | Nein |
+| `SESSION_COOKIE_SECURE` | `true` setzen, wenn die App über HTTPS läuft (Cookies nur verschlüsselt senden) | Empfohlen |
+
+Fortschrittsfotos werden nur noch eingeloggt über `/progress_photos/<id>/file` an den Besitzer ausgeliefert.
+Fotos aus dem alten, öffentlich erreichbaren Ordner `static/uploads/photos` werden beim Start automatisch in den privaten Ordner verschoben.
 
 ### SECRET_KEY setzen
 
@@ -162,6 +167,26 @@ Authentifizierung erfolgt über Session-Cookies (`POST /api/login`).
 | Methode | Pfad | Beschreibung |
 |---------|------|-------------|
 | `GET` | `/api/export` | Alle Trainingsdaten + Körpergewicht als JSON exportieren |
+
+## Update einer bestehenden Installation
+
+Nach jedem Update des Codes einmal den Update-Assistenten ausführen (App vorher stoppen):
+
+```bash
+python update.py            # interaktiv, fragt Fehlendes ab
+python update.py --dry-run  # nur anzeigen, was passieren würde
+python update.py --yes      # ohne Rückfragen (z.B. in Deploy-Skripten)
+```
+
+Der Assistent kann beliebig oft laufen und erledigt:
+
+- findet die Datenbank (auch am alten Ort `fitness.db` neben `app.py`) und legt eine Sicherung unter `instance/backups/` an
+- bringt das Schema auf den aktuellen Stand (fehlende Tabellen, Spalten, Indizes; ersetzt die einzelnen `migrate_*.py`-Skripte)
+- bereinigt Altdaten: unsichere Links, Daten gelöschter Benutzer, fehlende Besitzer-Zuordnung
+- verschiebt Fortschrittsfotos aus dem öffentlichen Ordner `static/uploads/photos` in den privaten Ordner
+- fragt fehlende Konfiguration ab und speichert sie in `.env`: `SECRET_KEY`, HTTPS-Cookies; prüft das SMTP-Passwort und ob es einen Administrator gibt (auf Wunsch Admin-Passwort neu setzen)
+
+Die Datei `.env` (neben `app.py`) wird beim Start automatisch geladen; echte Umgebungsvariablen haben Vorrang.
 
 ## Datenbank-Migration auf globale Übungen
 

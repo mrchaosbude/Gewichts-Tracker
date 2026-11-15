@@ -81,7 +81,7 @@ Typ: ausdauer
                 <div class="preview-meta">
                     {% if ex.muscle_group %}<span class="badge badge-secondary font-weight-medium">{{ ex.muscle_group }}</span> {% endif %}
                     {% if ex.exercise_type %}<span class="badge badge-info font-weight-medium">{{ ex.exercise_type }}</span> {% endif %}
-                    {% if ex.video_url %}<a href="{{ ex.video_url }}" target="_blank" class="import-hint">YouTube</a>{% endif %}
+                    {% if ex.video_url|safe_url %}<a href="{{ ex.video_url|safe_url }}" target="_blank" rel="noopener noreferrer" class="import-hint">YouTube</a>{% endif %}
                 </div>
                 {% endif %}
                 {% if ex.description %}
