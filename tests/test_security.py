@@ -97,7 +97,7 @@ class TestVideoUrlXss:
         sample_plan.share_token = 'tok-123'
         db.session.commit()
         _login(client, admin_user)
-        resp = client.get('/shared/tok-123')
+        resp = client.post('/shared/tok-123')
         assert resp.status_code == 302
         copied = TrainingPlan.query.filter_by(user_id=admin_user.id).one()
         assert all(ex.video_url is None for ex in copied.exercises)

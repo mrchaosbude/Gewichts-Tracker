@@ -187,6 +187,16 @@ Alles auf der Seite **Konto**:
 - **Sessions bearbeiten:** Stift-Symbol neben jedem Eintrag auf der Übungsseite.
 - API: `PUT /api/sessions/<id>`, `DELETE /api/account` (JSON: `current_password`).
 
+### Sicherheit
+
+- **Zwei-Faktor-Anmeldung (TOTP):** Jeder Benutzer richtet sie unter Konto → Zwei-Faktor-Anmeldung ein (Authenticator-App, 10 Backup-Codes). Der Admin kann sie pro Benutzer zurücksetzen und für Administratoren zur Pflicht machen (Admin → Einstellungen). Ist ein Admin ausgesperrt, setzt `python update.py` sie zurück.
+- **Registrierung abschaltbar** (Admin → Einstellungen). `update.py` legt bei einer leeren Installation das Admin-Konto an, damit nicht der erste Besucher Administrator wird.
+- **Passwörter** brauchen überall mindestens 8 Zeichen.
+- **Logout** und das **Kopieren geteilter Pläne** passieren nur noch per Knopf (POST); ein geteilter Link zeigt zuerst eine Vorschau.
+- **Content-Security-Policy:** fremde Skript-Quellen, Formularziele, Plugins und Einbettung sind gesperrt. Mit `GEWICHTS_TRACKER_CSP` lässt sich der Header ersetzen, ein leerer Wert schaltet ihn ab.
+- **Reverse Proxy:** `GEWICHTS_TRACKER_TRUSTED_PROXIES=1` setzen, wenn nginx/Caddy davor sitzt. Dann zählt das Rate-Limit pro Besucher statt für alle gemeinsam. Ohne Proxy nicht setzen.
+- API: `POST /api/login` verlangt bei aktiver Zwei-Faktor-Anmeldung zusätzlich `totp_code`; ohne ihn kommt `401 {"error": "totp_required"}`.
+
 Die weitere Planung steht in [ROADMAP.md](ROADMAP.md).
 
 ## Update einer bestehenden Installation

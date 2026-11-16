@@ -79,7 +79,10 @@ class TestSharePlan:
         # doesn't update Flask-Login's current_user after prior requests)
         with app.test_client() as other_client:
             other_client.post('/login', data={'username': 'admin', 'password': 'admin123'})
-            resp = other_client.get(f'/shared/{token}')
+            preview = other_client.get(f'/shared/{token}')
+            assert preview.status_code == 200  # nur Vorschau, noch keine Kopie
+            assert TrainingPlan.query.filter_by(user_id=admin_user.id).count() == 0
+            resp = other_client.post(f'/shared/{token}')
             assert resp.status_code == 302
         copied = TrainingPlan.query.filter_by(user_id=admin_user.id).first()
         assert copied is not None

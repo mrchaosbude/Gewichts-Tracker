@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Zwei-Faktor-Anmeldung{% endblock %}
+
+{% macro errors(field) %}
+  {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+{% endmacro %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Zwei-Faktor-Anmeldung</h2>
+
+    {% if backup_codes %}
+      <div class="s-card" style="border: 1px solid #28a745;">
+        <h5 class="mb-2">Deine Backup-Codes</h5>
+        <p class="small">Jeder Code funktioniert einmal, falls du dein Handy nicht zur Hand hast. <strong>Sie werden nur jetzt angezeigt</strong> – notiere sie oder speichere sie im Passwortmanager.</p>
+        <pre class="mb-0" style="font-size: 1.05rem; line-height: 1.8;">{% for code in backup_codes %}{{ code }}
+{% endfor %}</pre>
+      </div>
+    {% endif %}
+
+    {% if current_user.totp_enabled %}
+      <div class="s-card mt-3">
+        <p class="mb-2"><span class="text-success font-weight-bold">Aktiv.</span> Noch {{ backup_codes_left }} Backup-Codes übrig.</p>
+        <form method="POST">
+          {{ password_form.hidden_tag() }}
+          <div class="form-group">
+            {{ password_form.current_password.label(class="small font-weight-bold") }}
+            {{ password_form.current_password(class="form-control", autocomplete="current-password") }}
+            {{ errors(password_form.current_password) }}
+          </div>
+          <div class="form-group">
+            {{ password_form.code.label(class="small font-weight-bold") }}
+            {{ password_form.code(class="form-control", autocomplete="one-time-code", inputmode="text") }}
+            {{ errors(password_form.code) }}
+          </div>
+          <button type="submit" formaction="{{ url_for('account_two_factor_backup_codes') }}" class="btn btn-outline-primary btn-block">Neue Backup-Codes erzeugen</button>
+          <button type="submit" formaction="{{ url_for('account_two_factor_disable') }}" class="btn btn-outline-danger btn-block">Zwei-Faktor-Anmeldung abschalten</button>
+        </form>
+      </div>
+    {% elif setup %}
+      <div class="s-card">
+        <p class="small"><strong>1.</strong> Scanne den Code mit einer Authenticator-App (z.&nbsp;B. Aegis, Google Authenticator, Authy, 2FAS){% if not setup.qr %} oder tippe den Schlüssel dort ein{% endif %}.</p>
+        {% if setup.qr %}
+          <div class="text-center mb-2">{{ setup.qr }}</div>
+          <p class="small text-muted">Geht das Scannen nicht? Schlüssel von Hand eingeben:</p>
+        {% else %}
+          <p class="small"><a href="{{ setup.uri }}">Auf diesem Gerät in der Authenticator-App öffnen</a></p>
+        {% endif %}
+        <pre class="text-center" style="font-size: 1.05rem; white-space: pre-wrap;">{{ setup.secret }}</pre>
+        <p class="small"><strong>2.</strong> Gib den 6-stelligen Code ein, den die App anzeigt.</p>
+        <form method="POST" action="{{ url_for('account_two_factor_enable') }}">
+          {{ code_form.hidden_tag() }}
+          <div class="form-group">
+            {{ code_form.code(class="form-control", autocomplete="one-time-code", inputmode="numeric", placeholder="123456") }}
+            {{ errors(code_form.code) }}
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Aktivieren</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="s-card">
+        <p class="small">Mit der Zwei-Faktor-Anmeldung fragt der Login zusätzlich zum Passwort einen Code aus einer Authenticator-App auf deinem Handy ab.</p>
+        <form method="POST" action="{{ url_for('account_two_factor_setup') }}">
+          {{ password_form.hidden_tag() }}
+          <div class="form-group">
+            {{ password_form.current_password.label(class="small font-weight-bold") }}
+            {{ password_form.current_password(class="form-control", autocomplete="current-password") }}
+            {{ errors(password_form.current_password) }}
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Einrichten</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <a href="{{ url_for('account') }}" class="back-link">&larr; Zurück zum Konto</a>
+  </div>
+{% endblock %}

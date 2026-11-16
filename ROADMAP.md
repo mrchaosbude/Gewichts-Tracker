@@ -18,15 +18,17 @@ Nach jedem Update auf dem Server: `python update.py` ausführen.
 - [x] Import des eigenen Exports (Umzug, Backup auf Nutzerebene)
 - [x] Sessions bearbeiten statt nur löschen und neu anlegen
 
-## Phase 3 – Sicherheit nachziehen
+## Phase 3 – Sicherheit nachziehen (erledigt bis auf strikte CSP)
 
-- [ ] Erst-Registrierung absichern: Admin über `update.py` anlegen, offene Registrierung abschaltbar
-- [ ] Zwei-Faktor-Anmeldung (TOTP), verpflichtend für Admins einstellbar
-- [ ] Logout und „geteilten Plan kopieren“ nur noch per POST
-- [ ] `/sync` validiert Datentypen wie die API
-- [ ] Einheitliche Passwortregeln (Web und API: mindestens 8 Zeichen)
-- [ ] Content-Security-Policy (setzt voraus: Inline-Skripte aus den Templates in Dateien)
-- [ ] `ProxyFix` konfigurierbar, damit das Rate-Limit hinter einem Reverse Proxy pro Nutzer zählt
+- [x] Erst-Registrierung absichern: Admin über `update.py` anlegen, offene Registrierung abschaltbar
+- [x] Zwei-Faktor-Anmeldung (TOTP), verpflichtend für Admins einstellbar
+- [x] Logout und „geteilten Plan kopieren“ nur noch per POST
+- [x] `/sync` validiert Datentypen wie die API
+- [x] Einheitliche Passwortregeln (Web und API: mindestens 8 Zeichen)
+- [x] Content-Security-Policy, Stufe 1: fremde Skript-Quellen, Formularziele, Plugins und Einbettung gesperrt
+- [ ] Content-Security-Policy, Stufe 2: Inline-Skripte verbieten (setzt voraus: 20 Skript-Blöcke und 52 `on…`-Attribute aus den Templates in Dateien verlagern)
+- [x] `ProxyFix` konfigurierbar, damit das Rate-Limit hinter einem Reverse Proxy pro Nutzer zählt
+- [x] Fehlende Datenbankspalten werden beim Start selbst ergänzt
 
 ## Phase 4 – Umbau für Wartbarkeit
 

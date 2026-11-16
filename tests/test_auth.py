@@ -90,7 +90,7 @@ class TestLogin:
 
 class TestLogout:
     def test_logout(self, logged_in_client):
-        resp = logged_in_client.get('/logout')
+        resp = logged_in_client.post('/logout')
         assert resp.status_code == 302
 
     def test_logout_unauthenticated(self, client):
