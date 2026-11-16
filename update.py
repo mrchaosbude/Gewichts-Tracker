@@ -165,6 +165,10 @@ def backup_database(ui: Assistant, db_path):
     os.makedirs(backup_dir, exist_ok=True)
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     target = os.path.join(backup_dir, f'fitness-{stamp}.db')
+    counter = 1
+    while os.path.exists(target):  # nie eine frühere Sicherung überschreiben
+        counter += 1
+        target = os.path.join(backup_dir, f'fitness-{stamp}-{counter}.db')
     src = sqlite3.connect(db_path)
     try:
         dst = sqlite3.connect(target)

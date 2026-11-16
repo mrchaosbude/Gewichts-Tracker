@@ -239,6 +239,7 @@
         {% if current_user.is_admin %}
           <a href="{{ url_for('admin_overview') }}" class="btn btn-warning btn-sm mr-1">Admin</a>
         {% endif %}
+        <a href="{{ url_for('account') }}" class="btn btn-outline-secondary btn-sm mr-1">Konto</a>
         <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">Logout</a>
       </div>
     </div>

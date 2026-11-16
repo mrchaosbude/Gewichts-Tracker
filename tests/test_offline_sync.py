@@ -34,7 +34,7 @@ def client():
         with c.session_transaction() as sess:
             with app.app_context():
                 u = User.query.filter_by(username='synctest').first()
-                sess['_user_id'] = str(u.id)
+                sess['_user_id'] = u.get_id()
         yield c
 
     with app.app_context():

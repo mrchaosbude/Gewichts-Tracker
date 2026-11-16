@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Mein Konto{% endblock %}
+
+{% macro field_errors(field) %}
+  {% for error in field.errors %}
+    <div class="text-danger small mt-1">{{ error }}</div>
+  {% endfor %}
+{% endmacro %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Mein Konto</h2>
+    <p class="text-muted subtitle">{{ current_user.username }}</p>
+
+    <div class="s-card">
+      <h5 class="mb-3">Passwort ändern</h5>
+      <form method="POST" action="{{ url_for('account_change_password') }}">
+        {{ password_form.hidden_tag() }}
+        <div class="form-group">
+          {{ password_form.current_password.label(class="small font-weight-bold") }}
+          {{ password_form.current_password(class="form-control", autocomplete="current-password") }}
+          {{ field_errors(password_form.current_password) }}
+        </div>
+        <div class="form-group">
+          {{ password_form.new_password.label(class="small font-weight-bold") }}
+          {{ password_form.new_password(class="form-control", autocomplete="new-password") }}
+          <small class="text-muted">Mindestens 8 Zeichen.</small>
+          {{ field_errors(password_form.new_password) }}
+        </div>
+        <div class="form-group">
+          {{ password_form.confirm.label(class="small font-weight-bold") }}
+          {{ password_form.confirm(class="form-control", autocomplete="new-password") }}
+          {{ field_errors(password_form.confirm) }}
+        </div>
+        {{ password_form.submit(class="btn btn-primary btn-block") }}
+      </form>
+      <p class="text-muted small mt-2 mb-0">Danach werden alle anderen Geräte abgemeldet.</p>
+    </div>
+
+    <div class="s-card mt-3">
+      <h5 class="mb-3">E-Mail-Adresse</h5>
+      <form method="POST" action="{{ url_for('account_change_email') }}">
+        {{ email_form.hidden_tag() }}
+        <div class="form-group">
+          {{ email_form.email.label(class="small font-weight-bold") }}
+          {{ email_form.email(class="form-control", type="email", autocomplete="email", placeholder="name@example.com") }}
+          {{ field_errors(email_form.email) }}
+        </div>
+        <div class="form-group">
+          {{ email_form.current_password.label(class="small font-weight-bold") }}
+          {{ email_form.current_password(class="form-control", autocomplete="current-password") }}
+          {{ field_errors(email_form.current_password) }}
+        </div>
+        {{ email_form.submit(class="btn btn-outline-primary btn-block") }}
+      </form>
+      <p class="text-muted small mt-2 mb-0">
+        {% if reset_available %}
+          An diese Adresse geht der Link, falls du dein Passwort vergisst.
+        {% else %}
+          „Passwort vergessen“ ist auf diesem Server noch nicht eingerichtet (kein E-Mail-Versand).
+        {% endif %}
+      </p>
+    </div>
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
+  </div>
+{% endblock %}

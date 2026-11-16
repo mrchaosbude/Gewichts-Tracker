@@ -43,6 +43,7 @@
         </div>
         {{ form.submit(class="btn btn-primary btn-block") }}
       </form>
+      <p class="text-center mt-2 mb-0 small"><a href="{{ url_for('forgot_password') }}">Passwort vergessen?</a></p>
       {% if show_resend %}
       <div class="login-divider">
         <form method="POST" action="{{ url_for('resend_confirmation') }}">

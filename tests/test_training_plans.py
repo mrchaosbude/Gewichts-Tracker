@@ -32,7 +32,7 @@ class TestPlanDetail:
 
     def test_plan_detail_other_user(self, client, admin_user, sample_plan):
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.get(f'/training_plan/{sample_plan.id}')
         assert resp.status_code == 403
 
@@ -50,7 +50,7 @@ class TestDeletePlan:
 
     def test_delete_plan_other_user(self, client, admin_user, sample_plan):
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.post(f'/training_plan/{sample_plan.id}/delete')
         assert resp.status_code == 403
 

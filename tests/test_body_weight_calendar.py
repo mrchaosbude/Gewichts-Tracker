@@ -45,7 +45,7 @@ class TestBodyWeight:
         db.session.add(entry)
         db.session.commit()
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(admin_user.id)
+            sess['_user_id'] = admin_user.get_id()
         resp = client.post(f'/body_weight/{entry.id}/delete')
         assert resp.status_code == 403
 

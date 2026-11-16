@@ -33,10 +33,13 @@ import uuid
 import secrets
 import smtplib
 import hashlib
+import hmac
+import re
 import base64
 import html
 import shutil
 from cryptography.fernet import Fernet, InvalidToken
+from itsdangerous import BadSignature, URLSafeTimedSerializer
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import calendar as cal_module
@@ -94,6 +97,43 @@ def decrypt_value(encrypted):
         return _get_fernet().decrypt(encrypted.encode()).decode()
     except (InvalidToken, Exception):
         return encrypted
+
+
+def password_fingerprint(password_hash):
+    """Short keyed digest of a password hash.
+
+    Steckt in der Login-Sitzung und im Reset-Link: Ändert sich das Passwort,
+    werden alle alten Sitzungen und Links automatisch ungültig.
+    """
+    key = app.config['SECRET_KEY'].encode()
+    return hmac.new(key, (password_hash or '').encode(), hashlib.sha256).hexdigest()[:16]
+
+
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_RESET_MAX_AGE = 3600  # Sekunden
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def _password_reset_serializer():
+    return URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='password-reset')
+
+
+def make_password_reset_token(user):
+    return _password_reset_serializer().dumps({'uid': user.id, 'fp': password_fingerprint(user.password)})
+
+
+def verify_password_reset_token(token):
+    """Return the user for a valid, unexpired, unused reset token, else None."""
+    try:
+        data = _password_reset_serializer().loads(token, max_age=PASSWORD_RESET_MAX_AGE)
+    except (BadSignature, ValueError, TypeError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get('uid'), int):
+        return None
+    user = db.session.get(User, data['uid'])
+    if user is None or not hmac.compare_digest(str(data.get('fp', '')), password_fingerprint(user.password)):
+        return None
+    return user
 
 
 def sanitize_external_url(value, *, allow_relative=False, max_length=500):
@@ -164,6 +204,10 @@ class User(UserMixin, db.Model):
     is_trainer = db.Column(db.Boolean, default=False)
     training_plans = db.relationship('TrainingPlan', backref='owner', lazy=True, cascade="all, delete-orphan")
     exercises = db.relationship('Exercise', backref='owner', lazy=True)
+
+    def get_id(self):
+        # Sitzung ist an das aktuelle Passwort gebunden (siehe password_fingerprint)
+        return f'{self.id}:{password_fingerprint(self.password)}'
 
 plan_exercises = db.Table(
     'plan_exercises',
@@ -378,6 +422,55 @@ def _smtp_connect(settings):
     if settings.smtp_username and settings.smtp_password:
         server.login(settings.smtp_username, decrypt_value(settings.smtp_password))
     return server
+
+
+def send_app_email(to_address, subject, html_body):
+    """Send one HTML mail via the configured SMTP server. Returns True on success."""
+    settings = get_app_settings()
+    if not settings.smtp_server or not settings.smtp_sender_email:
+        return False
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = settings.smtp_sender_email
+    msg['To'] = to_address
+    msg.attach(MIMEText(html_body, 'html'))
+    try:
+        server = _smtp_connect(settings)
+        server.sendmail(settings.smtp_sender_email, to_address, msg.as_string())
+        server.quit()
+        return True
+    except Exception as exc:
+        app.logger.error('Failed to send email: %s', exc)
+        return False
+
+
+def send_password_reset_email(user):
+    settings = get_app_settings()
+    app_name = settings.app_name or 'Gewichts-Tracker'
+    reset_url = html.escape(
+        url_for('reset_password', token=make_password_reset_token(user), _external=True), quote=True)
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #007bff;">{html.escape(app_name)}</h2>
+        <p>Hallo <strong>{html.escape(user.username)}</strong>,</p>
+        <p>für dein Konto wurde ein neues Passwort angefordert. Der folgende Link ist 1 Stunde gültig:</p>
+        <p style="text-align: center; margin: 30px 0;">
+            <a href="{reset_url}"
+               style="background: #007bff; color: #fff; padding: 12px 28px; border-radius: 6px;
+                      text-decoration: none; font-weight: bold;">
+                Neues Passwort setzen
+            </a>
+        </p>
+        <p style="font-size: 0.85rem; color: #666;">
+            Oder kopiere diesen Link in deinen Browser:<br>
+            <a href="{reset_url}">{reset_url}</a>
+        </p>
+        <p style="font-size: 0.85rem; color: #999; margin-top: 30px;">
+            Falls du das nicht warst, kannst du diese E-Mail ignorieren. Dein Passwort bleibt unverändert.
+        </p>
+    </div>
+    """
+    return send_app_email(user.email, f'{app_name} – Passwort zurücksetzen', html_body)
 
 
 def send_verification_email(user):
@@ -606,7 +699,14 @@ def inject_footer_pages():
 
 @login_manager.user_loader
 def load_user(user_id):
-    return db.session.get(User, int(user_id))
+    raw_id, _, fingerprint = str(user_id).partition(':')
+    try:
+        user = db.session.get(User, int(raw_id))
+    except ValueError:
+        return None
+    if user is None or not hmac.compare_digest(fingerprint, password_fingerprint(user.password)):
+        return None  # Passwort wurde geändert (oder alte Sitzung) -> neu einloggen
+    return user
 
 # ----------------------------------------------------
 # Decorators
@@ -690,6 +790,35 @@ class ExerciseSessionForm(FlaskForm):
     )
     notes = TextAreaField('Notizen', render_kw={"rows": 3})
     submit = SubmitField('Session hinzufügen')
+
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField('Aktuelles Passwort', validators=[DataRequired()])
+    new_password = PasswordField('Neues Passwort', validators=[DataRequired(), Length(min=PASSWORD_MIN_LENGTH, max=200)])
+    confirm = PasswordField('Neues Passwort wiederholen', validators=[DataRequired(), EqualTo('new_password', message='Passwörter müssen übereinstimmen')])
+    submit = SubmitField('Passwort ändern')
+
+
+class ChangeEmailForm(FlaskForm):
+    email = StringField('E-Mail-Adresse', validators=[Optional(), Length(max=150)])
+    current_password = PasswordField('Aktuelles Passwort', validators=[DataRequired()])
+    submit = SubmitField('E-Mail speichern')
+
+    def validate_email(self, field):
+        value = (field.data or '').strip()
+        if value and not EMAIL_RE.match(value):
+            raise ValidationError('Bitte eine gültige E-Mail-Adresse eingeben.')
+
+
+class ForgotPasswordForm(FlaskForm):
+    identifier = StringField('Benutzername oder E-Mail', validators=[DataRequired(), Length(max=150)])
+    submit = SubmitField('Link anfordern')
+
+
+class ResetPasswordForm(FlaskForm):
+    new_password = PasswordField('Neues Passwort', validators=[DataRequired(), Length(min=PASSWORD_MIN_LENGTH, max=200)])
+    confirm = PasswordField('Neues Passwort wiederholen', validators=[DataRequired(), EqualTo('new_password', message='Passwörter müssen übereinstimmen')])
+    submit = SubmitField('Passwort speichern')
+
 
 class AdminChangePasswordForm(FlaskForm):
     new_password = PasswordField('Neues Passwort', validators=[DataRequired(), Length(min=6)])
@@ -1364,6 +1493,120 @@ def resend_confirmation():
     else:
         flash('E-Mail konnte nicht gesendet werden. Bitte kontaktiere den Administrator.', 'warning')
     return redirect(url_for('login'))
+
+
+# ----------------------------------------------------
+# Konto: Passwort, E-Mail, Passwort vergessen
+# ----------------------------------------------------
+def _render_account(password_form=None, email_form=None):
+    if email_form is None:
+        email_form = ChangeEmailForm(prefix='mail')
+        email_form.email.data = current_user.email or ''
+    settings = get_app_settings()
+    return render_template(
+        'account.html',
+        password_form=password_form or ChangePasswordForm(prefix='pw'),
+        email_form=email_form,
+        reset_available=bool(settings.smtp_server and settings.smtp_sender_email),
+    )
+
+
+@app.route('/account')
+@login_required
+def account():
+    return _render_account()
+
+
+@app.route('/account/password', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_change_password():
+    form = ChangePasswordForm(prefix='pw')
+    if form.validate_on_submit():
+        user = db.session.get(User, current_user.id)
+        if not check_password_hash(user.password, form.current_password.data):
+            form.current_password.errors.append('Aktuelles Passwort ist falsch.')
+        else:
+            user.password = generate_password_hash(form.new_password.data, method='pbkdf2:sha256')
+            db.session.commit()
+            login_user(user)  # diese Sitzung behalten, alle anderen sind jetzt ungültig
+            flash('Passwort geändert. Alle anderen Geräte wurden abgemeldet.', 'success')
+            return redirect(url_for('account'))
+    return _render_account(password_form=form), 400
+
+
+@app.route('/account/email', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_change_email():
+    form = ChangeEmailForm(prefix='mail')
+    if form.validate_on_submit():
+        user = db.session.get(User, current_user.id)
+        new_email = (form.email.data or '').strip() or None
+        if not check_password_hash(user.password, form.current_password.data):
+            form.current_password.errors.append('Aktuelles Passwort ist falsch.')
+        elif new_email and User.query.filter(
+                db.func.lower(User.email) == new_email.lower(), User.id != user.id).first():
+            form.email.errors.append('Diese E-Mail-Adresse wird bereits verwendet.')
+        elif new_email is None and get_app_settings().require_email_verification:
+            form.email.errors.append('Eine E-Mail-Adresse ist erforderlich.')
+        else:
+            user.email = new_email
+            db.session.commit()
+            flash('E-Mail-Adresse gespeichert.' if new_email else 'E-Mail-Adresse entfernt.', 'success')
+            return redirect(url_for('account'))
+    return _render_account(email_form=form), 400
+
+
+_reset_mail_last_sent = {}  # user_id -> Zeitpunkt; begrenzt Mail-Flut an ein Opfer
+RESET_MAIL_COOLDOWN = 300  # Sekunden
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=['POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('account'))
+    settings = get_app_settings()
+    reset_available = bool(settings.smtp_server and settings.smtp_sender_email)
+    form = ForgotPasswordForm()
+    if form.validate_on_submit() and reset_available:
+        identifier = form.identifier.data.strip()
+        user = User.query.filter_by(username=identifier).first()
+        if user is None:
+            matches = User.query.filter(db.func.lower(User.email) == identifier.lower()).all()
+            user = matches[0] if len(matches) == 1 else None
+        if user is not None and user.email:
+            now = _utcnow()
+            last = _reset_mail_last_sent.get(user.id)
+            if last is None or (now - last).total_seconds() >= RESET_MAIL_COOLDOWN:
+                _reset_mail_last_sent[user.id] = now
+                send_password_reset_email(user)
+        # Immer dieselbe Antwort, damit sich keine Konten erraten lassen
+        flash('Falls ein Konto mit hinterlegter E-Mail-Adresse existiert, wurde ein Link zum Zurücksetzen gesendet.', 'info')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html', form=form, reset_available=reset_available)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
+def reset_password(token):
+    user = verify_password_reset_token(token)
+    if user is None:
+        flash('Der Link ist ungültig, abgelaufen oder wurde bereits verwendet.', 'danger')
+        return redirect(url_for('forgot_password'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.password = generate_password_hash(form.new_password.data, method='pbkdf2:sha256')
+        db.session.commit()
+        _reset_mail_last_sent.pop(user.id, None)
+        logout_user()
+        flash('Passwort gespeichert. Du kannst dich jetzt einloggen.', 'success')
+        return redirect(url_for('login'))
+    response = make_response(render_template('reset_password.html', form=form, token=token))
+    response.headers['Referrer-Policy'] = 'no-referrer'  # Token nicht an Dritte weitergeben
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.route('/dashboard')
@@ -2801,6 +3044,8 @@ def admin_change_password(user_id):
     if form.validate_on_submit():
         user.password = generate_password_hash(form.new_password.data, method='pbkdf2:sha256')
         db.session.commit()
+        if user.id == current_user.id:
+            login_user(user)  # eigene Sitzung behalten
         flash(f'Passwort für {user.username} geändert!', 'success')
         return redirect(url_for('admin_overview'))
     return render_template('admin_change_password.html', user=user, form=form)
@@ -3235,6 +3480,28 @@ def api_login():
 def api_logout():
     logout_user()
     return jsonify({'message': 'logged out'})
+
+
+@api_bp.route('/account/password', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def api_change_password():
+    data, error_response, status_code = _get_json_payload()
+    if error_response is not None:
+        return error_response, status_code
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    if not isinstance(current_password, str) or not isinstance(new_password, str):
+        return jsonify({'error': 'current_password and new_password required'}), 400
+    if len(new_password) < PASSWORD_MIN_LENGTH:
+        return jsonify({'error': f'password must be at least {PASSWORD_MIN_LENGTH} characters'}), 400
+    user = db.session.get(User, current_user.id)
+    if not check_password_hash(user.password, current_password):
+        return jsonify({'error': 'current password is wrong'}), 403
+    user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+    db.session.commit()
+    login_user(user)
+    return jsonify({'message': 'password changed'})
 
 
 @api_bp.route('/training_plans', methods=['GET'])
