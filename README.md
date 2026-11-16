@@ -177,6 +177,16 @@ Authentifizierung erfolgt über Session-Cookies (`POST /api/login`).
 
 Hinweis zum Update: Nach dem Einspielen dieser Version müssen sich alle Benutzer einmal neu einloggen.
 
+### Eigene Daten
+
+Alles auf der Seite **Konto**:
+
+- **Alles exportieren:** ZIP mit `data.json` (Pläne, Übungen, Sessions, Körpergewichte, geplante Trainings) und dem Ordner `photos/`.
+- **Importieren:** nimmt dieses ZIP oder den älteren Trainingsdaten-Export (JSON) an. Der Import fügt nur hinzu und überschreibt nichts; bei einem Fehler wird nichts übernommen. Obergrenze 100 MB, einstellbar über `GEWICHTS_TRACKER_MAX_IMPORT_MB`.
+- **Konto löschen:** mit Passwort und Benutzername; entfernt alle Daten und Fotos. Der einzige Administrator kann sich nicht selbst löschen.
+- **Sessions bearbeiten:** Stift-Symbol neben jedem Eintrag auf der Übungsseite.
+- API: `PUT /api/sessions/<id>`, `DELETE /api/account` (JSON: `current_password`).
+
 Die weitere Planung steht in [ROADMAP.md](ROADMAP.md).
 
 ## Update einer bestehenden Installation

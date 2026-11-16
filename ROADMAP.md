@@ -3,7 +3,7 @@
 Reihenfolge nach Nutzen und Risiko. Jede Phase ist ein eigener Pull Request (oder mehrere kleine).
 Nach jedem Update auf dem Server: `python update.py` ausführen.
 
-## Phase 1 – Konto-Grundlagen und CI (in Arbeit)
+## Phase 1 – Konto-Grundlagen und CI (erledigt)
 
 - [x] CI: `pytest` läuft bei jedem Push und Pull Request (GitHub Actions)
 - [x] Passwort selbst ändern (Konto-Seite)
@@ -11,12 +11,12 @@ Nach jedem Update auf dem Server: `python update.py` ausführen.
 - [x] „Passwort vergessen“ per E-Mail (Link 1 Stunde gültig, einmal verwendbar)
 - [x] Passwortänderung meldet alle anderen Sitzungen ab (auch bei Änderung durch den Admin)
 
-## Phase 2 – Eigene Daten im Griff
+## Phase 2 – Eigene Daten im Griff (erledigt)
 
-- [ ] Konto selbst löschen (mit Passwortabfrage, löscht alle Daten und Fotos)
-- [ ] Export vervollständigen: Körpergewichte, geplante Trainings und Fotos als ZIP
-- [ ] Import des eigenen Exports (Umzug, Backup auf Nutzerebene)
-- [ ] Sessions bearbeiten statt nur löschen und neu anlegen
+- [x] Konto selbst löschen (mit Passwortabfrage, löscht alle Daten und Fotos)
+- [x] Export vervollständigen: Körpergewichte, geplante Trainings und Fotos als ZIP
+- [x] Import des eigenen Exports (Umzug, Backup auf Nutzerebene)
+- [x] Sessions bearbeiten statt nur löschen und neu anlegen
 
 ## Phase 3 – Sicherheit nachziehen
 

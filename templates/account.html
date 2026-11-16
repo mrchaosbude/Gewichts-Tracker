@@ -63,6 +63,44 @@
       </p>
     </div>
 
+    <div class="s-card mt-3">
+      <h5 class="mb-3">Meine Daten</h5>
+      <a href="{{ url_for('export_full') }}" class="btn btn-outline-primary btn-block">Alles exportieren (ZIP mit Fotos)</a>
+      <p class="text-muted small mt-2">Enthält Pläne, Übungen, Sessions, Körpergewichte, geplante Trainings und Fortschrittsfotos.
+        Nur Trainingsdaten: <a href="{{ url_for('export_training_data') }}">JSON</a> ·
+        <a href="{{ url_for('export_training_data', format='csv') }}">CSV</a></p>
+      <hr>
+      <form method="POST" action="{{ url_for('account_import') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label for="export_file" class="small font-weight-bold">Export importieren</label>
+          <input type="file" class="form-control-file" id="export_file" name="export_file" accept=".zip,.json,application/zip,application/json" required>
+        </div>
+        <button type="submit" class="btn btn-outline-secondary btn-block">Importieren</button>
+      </form>
+      <p class="text-muted small mt-2 mb-0">Der Import fügt nur hinzu und überschreibt nichts (max. {{ max_import_mb }} MB).
+        Pläne mit gleichem Titel bekommen den Zusatz „(Import)“; vorhandene Körpergewichte, Planungen und Fotos werden nicht doppelt angelegt.</p>
+    </div>
+
+    <div class="s-card mt-3" style="border: 1px solid #dc3545;">
+      <h5 class="mb-3 text-danger">Konto löschen</h5>
+      <p class="small">Löscht dein Konto mit allen Plänen, Sessions, Körpergewichten und Fotos. Das lässt sich nicht rückgängig machen. Exportiere deine Daten vorher, wenn du sie behalten willst.</p>
+      <form method="POST" action="{{ url_for('account_delete') }}" onsubmit="return confirm('Konto und alle Daten wirklich endgültig löschen?');">
+        {{ delete_form.hidden_tag() }}
+        <div class="form-group">
+          {{ delete_form.current_password.label(class="small font-weight-bold") }}
+          {{ delete_form.current_password(class="form-control", autocomplete="current-password") }}
+          {{ field_errors(delete_form.current_password) }}
+        </div>
+        <div class="form-group">
+          {{ delete_form.confirm_username.label(class="small font-weight-bold") }}
+          {{ delete_form.confirm_username(class="form-control", autocomplete="off", placeholder=current_user.username) }}
+          {{ field_errors(delete_form.confirm_username) }}
+        </div>
+        {{ delete_form.submit(class="btn btn-danger btn-block") }}
+      </form>
+    </div>
+
     <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
   </div>
 {% endblock %}
