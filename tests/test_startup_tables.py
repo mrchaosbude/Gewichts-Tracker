@@ -9,20 +9,22 @@ from sqlalchemy import inspect
 def reset_app_module():
     """Ensure a fresh import of the app module for each test."""
 
-    original = sys.modules.copy()
+    def ours(name):
+        return name == 'app' or name == 'gewichts_tracker' or name.startswith('gewichts_tracker.')
+
+    original = {name: mod for name, mod in sys.modules.items() if ours(name)}
+    for name in original:
+        sys.modules.pop(name)
     yield
-    for name in list(sys.modules.keys()):
-        if name not in original and name.startswith('app'):
-            sys.modules.pop(name, None)
+    for name in [n for n in sys.modules if ours(n)]:
+        sys.modules.pop(name)
+    sys.modules.update(original)
 
 
 def test_startup_creates_missing_tables(tmp_path, monkeypatch, reset_app_module):
     db_file = tmp_path / 'startup.db'
     database_uri = f'sqlite:///{db_file}'
     monkeypatch.setenv('GEWICHTS_TRACKER_DATABASE_URI', database_uri)
-
-    if 'app' in sys.modules:
-        del sys.modules['app']
 
     app_module = importlib.import_module('app')
 

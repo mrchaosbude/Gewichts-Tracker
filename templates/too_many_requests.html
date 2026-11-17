@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Zu viele Versuche{% endblock %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Zu viele Versuche</h2>
+    <div class="s-card">
+      <p class="mb-2">Zum Schutz deines Kontos ist die Anmeldung gerade gesperrt, weil es zu viele Fehlversuche gab.</p>
+      <p class="mb-0 small text-muted">Bitte warte etwa 15 Minuten und versuche es dann erneut. Falls du dein Passwort vergessen hast, nutze „Passwort vergessen“.</p>
+    </div>
+    <a href="{{ url_for('login') }}" class="back-link">&larr; Zurück zum Login</a>
+  </div>
+{% endblock %}

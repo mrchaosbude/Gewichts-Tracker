@@ -2,6 +2,7 @@ nul
 
 # Laufzeitdaten / Geheimnisse - niemals committen
 instance/
+fitness.db
 static/uploads/
 *.db-journal
 .env
