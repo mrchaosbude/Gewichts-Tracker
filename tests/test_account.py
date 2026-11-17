@@ -6,6 +6,8 @@ from flask import g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import app as app_module
+from gewichts_tracker import mail, security
+from gewichts_tracker.views import auth as auth_views
 from app import User, db, make_password_reset_token, verify_password_reset_token
 
 
@@ -30,8 +32,8 @@ def smtp(app, monkeypatch):
     settings.smtp_sender_email = 'noreply@example.com'
     db.session.commit()
     sent = []
-    monkeypatch.setattr(app_module, 'send_app_email', lambda to, subject, body: sent.append((to, subject, body)) or True)
-    app_module._reset_mail_last_sent.clear()
+    monkeypatch.setattr(mail, 'send_app_email', lambda to, subject, body: sent.append((to, subject, body)) or True)
+    auth_views._reset_mail_last_sent.clear()
     return sent
 
 
@@ -163,7 +165,7 @@ class TestForgotPassword:
         assert client.get('/reset-password/unsinn').status_code == 302
         token = make_password_reset_token(user)
         assert verify_password_reset_token(token).id == user.id
-        monkeypatch.setattr(app_module, 'PASSWORD_RESET_MAX_AGE', -1)
+        monkeypatch.setattr(security, 'PASSWORD_RESET_MAX_AGE', -1)
         assert verify_password_reset_token(token) is None
 
     def test_token_of_other_secret_is_rejected(self, app, user):

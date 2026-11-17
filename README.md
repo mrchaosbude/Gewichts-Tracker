@@ -219,18 +219,27 @@ Der Assistent kann beliebig oft laufen und erledigt:
 
 Die Datei `.env` (neben `app.py`) wird beim Start automatisch geladen; echte Umgebungsvariablen haben Vorrang.
 
-## Datenbank-Migration auf globale Übungen
+Die früheren Einzelskripte (`migrate_cardio.py`, `migrate_client_uuid.py`, `migration_runner.py` …) sind entfallen; `update.py` erledigt alles. Fehlende Spalten ergänzt die App zusätzlich beim Start selbst.
 
-Mit dem Skript `migrate_to_global_exercises.py` kannst du eine bestehende
-`fitness.db` aktualisieren, um die neuen globalen Übungen und die
-Zwischentabelle `plan_exercises` zu verwenden. Führe dazu einfach
+## Projektaufbau
 
-```bash
-python migrate_to_global_exercises.py
-```
+`app.py` ist nur noch der Einstiegspunkt (uwsgi: `module = app:app`, `python app.py`). Der Code liegt im Paket `gewichts_tracker/`:
 
-aus. Falls die Datenbank bereits angepasst wurde, beendet sich das Skript
-ohne weitere Änderungen.
+| Modul | Inhalt |
+|-------|--------|
+| `core.py` | Flask-App, Konfiguration, `db`, `csrf`, `limiter`, `login_manager`, `api_bp` |
+| `models.py` | Datenbankmodelle |
+| `crypto.py`, `security.py` | Verschlüsselung, Zwei-Faktor-Anmeldung, Reset-Tokens, URL-Prüfung |
+| `schema.py` | Tabellen anlegen, fehlende Spalten ergänzen |
+| `forms.py` | Formulare |
+| `services.py` | Logik, die Web-Seiten und API gemeinsam nutzen (Pläne kopieren, Reihenfolge, Kalender, Körpergewicht, Fotos) |
+| `stats.py`, `serializers.py`, `markdown_import.py`, `data_io.py` | Statistik, JSON-Ausgabe, Markdown-Import, Export/Import |
+| `mail.py`, `accounts.py`, `photos.py`, `permissions.py`, `parsing.py` | E-Mail, Konten, Fotoablage, Zugriffsrechte, Request-Prüfung |
+| `hooks.py` | Request-Hooks (Herkunftsprüfung, Sicherheits-Header, Größenlimit, 2FA-Pflicht, Login-Loader) |
+| `views/` | Web-Seiten: `auth`, `account`, `overview`, `tracking`, `training`, `sync`, `admin`, `template_plans` |
+| `api.py` | REST-API unter `/api` |
+
+Untere Module importieren nie obere (Reihenfolge siehe `gewichts_tracker/__init__.py`). Routen-Namen (`url_for('login')` usw.) sind unverändert.
 
 ## License
 
