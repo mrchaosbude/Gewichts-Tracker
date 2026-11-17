@@ -39,6 +39,15 @@
     </div>
 
     <div class="s-card mt-3">
+      <h5 class="mb-2">Zwei-Faktor-Anmeldung</h5>
+      <p class="small mb-2">
+        {% if current_user.totp_enabled %}<span class="text-success font-weight-bold">Aktiv.</span> Beim Login wird zusätzlich ein Code aus deiner Authenticator-App abgefragt.
+        {% else %}Nicht aktiv. Schützt dein Konto auch dann, wenn jemand dein Passwort kennt.{% endif %}
+      </p>
+      <a href="{{ url_for('account_two_factor') }}" class="btn btn-outline-primary btn-block">{% if current_user.totp_enabled %}Verwalten{% else %}Einrichten{% endif %}</a>
+    </div>
+
+    <div class="s-card mt-3">
       <h5 class="mb-3">E-Mail-Adresse</h5>
       <form method="POST" action="{{ url_for('account_change_email') }}">
         {{ email_form.hidden_tag() }}

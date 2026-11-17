@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Geteilter Trainingsplan{% endblock %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Geteilter Trainingsplan</h2>
+    <div class="s-card">
+      <h5 class="mb-1">{{ plan.title }}</h5>
+      {% if plan.description %}<p class="text-muted small">{{ plan.description }}</p>{% endif %}
+      <ul class="pl-3">
+        {% for exercise in plan.exercises %}
+          {% if exercise.is_separator %}
+            <li class="font-weight-bold" style="list-style: none; margin-left: -1rem;">{{ exercise.name }}</li>
+          {% else %}
+            <li>{{ exercise.name }}</li>
+          {% endif %}
+        {% else %}
+          <li class="text-muted">Keine Übungen</li>
+        {% endfor %}
+      </ul>
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <button type="submit" class="btn btn-primary btn-block">In mein Konto kopieren</button>
+      </form>
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; Zurück zum Dashboard</a>
+  </div>
+{% endblock %}

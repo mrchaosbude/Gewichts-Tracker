@@ -54,6 +54,8 @@
       </div>
       {% endif %}
     </div>
+    {% if registration_open %}
     <p class="text-center mt-3 fs-md">Noch nicht registriert? <a href="{{ url_for('register') }}">Registrieren</a></p>
+    {% endif %}
   </div>
 {% endblock %}

@@ -39,6 +39,12 @@
           </form>
         {% endif %}
         <a href="{{ url_for('admin_change_password', user_id=user.id) }}" class="btn btn-outline-primary btn-sm py-0 btn-action-xs">Passwort</a>
+        {% if user.totp_enabled %}
+          <form action="{{ url_for('admin_reset_two_factor', user_id=user.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Zwei-Faktor-Anmeldung für diesen Benutzer zurücksetzen?');">
+            {{ set_trainer_form.hidden_tag() }}
+            <button type="submit" class="btn btn-outline-secondary btn-sm py-0 btn-action-xs">2FA zurücksetzen</button>
+          </form>
+        {% endif %}
         {% if user.id != current_user.id %}
           <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" class="form-inline-action" onsubmit="return confirm('Benutzer wirklich löschen?');">
             {{ delete_user_form.hidden_tag() }}

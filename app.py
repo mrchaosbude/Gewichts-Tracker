@@ -11,6 +11,7 @@ from flask import (
     Response,
     send_file,
     make_response,
+    session as flask_session,
 )
 import markdown
 import nh3
@@ -39,6 +40,10 @@ import base64
 import html
 import shutil
 import math
+import struct
+import time
+from markupsafe import Markup
+from werkzeug.middleware.proxy_fix import ProxyFix
 import tempfile
 from cryptography.fernet import Fernet, InvalidToken
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -58,6 +63,31 @@ def _utcnow():
 
 
 app = Flask(__name__)
+
+# Hinter einem Reverse Proxy (nginx, Caddy ...): Anzahl der vertrauenswürdigen Proxys angeben,
+# damit Rate-Limit und HTTPS-Erkennung die echte Client-Adresse sehen.
+try:
+    _trusted_proxies = max(0, int(os.environ.get('GEWICHTS_TRACKER_TRUSTED_PROXIES', '0') or 0))
+except ValueError:
+    _trusted_proxies = 0
+if _trusted_proxies:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_trusted_proxies, x_proto=_trusted_proxies, x_host=_trusted_proxies)
+
+# Content-Security-Policy. Inline-Skripte sind noch erlaubt (die Templates nutzen sie),
+# aber fremde Skript-Quellen, Formularziele, Plugins und <base>-Umleitungen sind gesperrt.
+_CDN_SCRIPTS = 'https://cdn.jsdelivr.net https://code.jquery.com'
+_CDN_STYLES = 'https://stackpath.bootstrapcdn.com'
+DEFAULT_CSP = (
+    "default-src 'self'; "
+    f"script-src 'self' 'unsafe-inline' {_CDN_SCRIPTS}; "
+    f"style-src 'self' 'unsafe-inline' {_CDN_STYLES}; "
+    "img-src 'self' data: blob:; "
+    f"font-src 'self' data: {_CDN_STYLES}; "
+    f"connect-src 'self' {_CDN_SCRIPTS} {_CDN_STYLES}; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+)
+# Leerer Wert schaltet den Header ab, ein eigener Wert ersetzt ihn.
+CONTENT_SECURITY_POLICY = os.environ.get('GEWICHTS_TRACKER_CSP', DEFAULT_CSP).strip()
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('GEWICHTS_TRACKER_DATABASE_URI', 'sqlite:///fitness.db')
 
@@ -112,6 +142,101 @@ def password_fingerprint(password_hash):
 
 
 PASSWORD_MIN_LENGTH = 8
+
+# ----- Zwei-Faktor-Anmeldung (TOTP nach RFC 6238: SHA-1, 6 Stellen, 30 Sekunden) -----
+TOTP_STEP = 30
+TWO_FACTOR_PENDING_SECONDS = 300
+TWO_FACTOR_MAX_TRIES = 5
+
+
+def generate_totp_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode()
+
+
+def totp_code(secret_b32, counter):
+    key = base64.b32decode(secret_b32, casefold=True)
+    digest = hmac.new(key, struct.pack('>Q', counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    number = struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return f'{number % 1000000:06d}'
+
+
+def match_totp(secret_b32, code, *, after_counter=None, now=None):
+    """Return the matching time-step counter (current step +/- 1) or None."""
+    code = re.sub(r'\s', '', code or '')
+    if not re.fullmatch(r'\d{6}', code):
+        return None
+    current = int((now if now is not None else time.time()) // TOTP_STEP)
+    for counter in (current, current - 1, current + 1):
+        if after_counter is not None and counter <= after_counter:
+            continue
+        try:
+            if hmac.compare_digest(totp_code(secret_b32, counter), code):
+                return counter
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _user_totp_secret(user):
+    if not user.totp_secret:
+        return None
+    try:
+        return _get_fernet().decrypt(user.totp_secret.encode()).decode()
+    except Exception:
+        return None  # anderer SECRET_KEY -> 2FA muss neu eingerichtet werden
+
+
+def _hash_backup_code(code):
+    normalized = re.sub(r'[^0-9a-z]', '', (code or '').lower())
+    return hashlib.sha256(('backup:' + normalized).encode()).hexdigest()
+
+
+def generate_backup_codes(user, count=10):
+    """Create fresh one-time backup codes; returns the plain codes (shown once)."""
+    codes = [f'{secrets.token_hex(3)}-{secrets.token_hex(3)}' for _ in range(count)]
+    user.totp_backup_codes = json.dumps([_hash_backup_code(c) for c in codes])
+    return codes
+
+
+def verify_second_factor(user, code):
+    """Check a TOTP code or a backup code. Consumes it on success (caller commits)."""
+    secret = _user_totp_secret(user)
+    if secret:
+        counter = match_totp(secret, code, after_counter=user.totp_last_counter)
+        if counter is not None:
+            user.totp_last_counter = counter
+            return True
+    try:
+        hashes = json.loads(user.totp_backup_codes or '[]')
+    except ValueError:
+        hashes = []
+    candidate = _hash_backup_code(code)
+    if len(re.sub(r'[^0-9a-z]', '', (code or '').lower())) == 12 and candidate in hashes:
+        hashes.remove(candidate)
+        user.totp_backup_codes = json.dumps(hashes)
+        return True
+    return False
+
+
+def disable_two_factor(user):
+    user.totp_enabled = False
+    user.totp_secret = None
+    user.totp_last_counter = None
+    user.totp_backup_codes = None
+
+
+def totp_qr_svg(uri):
+    """Inline SVG QR code if the optional 'segno' package is installed, else None."""
+    try:
+        import segno
+    except ImportError:
+        return None
+    try:
+        return Markup(segno.make(uri, error='m').svg_inline(scale=5, border=2, dark='#000', light='#fff'))
+    except Exception as exc:  # pragma: no cover - QR ist nur Komfort, der Schlüssel steht daneben
+        app.logger.warning('Could not render 2FA QR code: %s', exc)
+        return None
 PASSWORD_RESET_MAX_AGE = 3600  # Sekunden
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -168,6 +293,47 @@ def _safe_url_filter(value):
     return sanitize_external_url(value, allow_relative=True) or ''
 
 
+def add_missing_columns():
+    """Add columns that exist in the models but not yet in the database.
+
+    Damit startet die App nach einem Update auch dann, wenn update.py noch nicht
+    gelaufen ist. Größere Umbauten (alte Tabellen neu aufbauen, Altdaten) macht
+    weiterhin nur update.py. Gibt die ergänzten Spalten als "tabelle.spalte" zurück.
+    """
+    from sqlalchemy import inspect, text
+
+    engine = db.engine
+    inspector = inspect(engine)
+    added = set()
+    for table in db.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+        existing = {col['name'] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in existing:
+                continue
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {column.type.compile(dialect=engine.dialect)}'
+            default = getattr(column.default, 'arg', None)
+            if isinstance(default, bool):
+                ddl += f' DEFAULT {int(default)}'
+            elif isinstance(default, (int, float)):
+                ddl += f' DEFAULT {default}'
+            elif isinstance(default, str):
+                ddl += " DEFAULT '" + default.replace("'", "''") + "'"
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+                if column.unique:
+                    conn.execute(text(
+                        f'CREATE UNIQUE INDEX IF NOT EXISTS "uq_{table.name}_{column.name}" '
+                        f'ON "{table.name}" ("{column.name}")'))
+            added.add(f'{table.name}.{column.name}')
+    if 'user.email_confirmed' in added:
+        # Die Verifizierung gab es vorher nicht: bestehende Konten nicht aussperren
+        with engine.begin() as conn:
+            conn.execute(text('UPDATE "user" SET email_confirmed = 1'))
+    return added
+
+
 def _ensure_database_setup_once() -> None:
     """Ensure database tables exist once per application lifecycle."""
 
@@ -177,6 +343,10 @@ def _ensure_database_setup_once() -> None:
     try:
         with app.app_context():
             db.create_all()
+            if not os.environ.get('GEWICHTS_TRACKER_NO_AUTO_MIGRATE'):  # update.py macht das selbst
+                added = add_missing_columns()
+                if added:
+                    app.logger.warning('Added missing database columns: %s', ', '.join(sorted(added)))
     except Exception as exc:  # pragma: no cover - defensive logging
         app.logger.warning('Failed to ensure database tables: %s', exc)
 
@@ -204,6 +374,11 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
     is_trainer = db.Column(db.Boolean, default=False)
+    # Zwei-Faktor-Anmeldung (TOTP)
+    totp_secret = db.Column(db.String(300), nullable=True)       # verschlüsselt
+    totp_enabled = db.Column(db.Boolean, default=False)
+    totp_last_counter = db.Column(db.Integer, nullable=True)     # verhindert Wiederverwendung eines Codes
+    totp_backup_codes = db.Column(db.Text, nullable=True)        # JSON-Liste von Hashes
     training_plans = db.relationship('TrainingPlan', backref='owner', lazy=True, cascade="all, delete-orphan")
     exercises = db.relationship('Exercise', backref='owner', lazy=True)
 
@@ -315,6 +490,8 @@ class AppSettings(db.Model):
     chart_1rm = db.Column(db.Boolean, default=True)
     chart_1rm_avg = db.Column(db.Boolean, default=True)
     require_email_verification = db.Column(db.Boolean, default=False)
+    registration_enabled = db.Column(db.Boolean, default=True)
+    require_admin_2fa = db.Column(db.Boolean, default=False)
     smtp_server = db.Column(db.String(150), nullable=True)
     smtp_port = db.Column(db.Integer, default=587)
     smtp_username = db.Column(db.String(150), nullable=True)
@@ -562,6 +739,8 @@ def set_cache_headers(response):
     response.headers.setdefault('X-Content-Type-Options', 'nosniff')
     response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     response.headers.setdefault('Referrer-Policy', 'same-origin')
+    if CONTENT_SECURITY_POLICY:
+        response.headers.setdefault('Content-Security-Policy', CONTENT_SECURITY_POLICY)
     return response
 
 
@@ -1093,6 +1272,7 @@ def inject_footer_pages():
         "footer_pages": FooterPage.query.all(),
         "footer_links": FooterLink.query.all(),
         "app_name": settings.app_name or 'Gewichts-Tracker',
+        "registration_open": settings.registration_enabled is not False,
     }
 
 
@@ -1139,7 +1319,7 @@ def exercise_owned_exclusively_by(user_id, exercise):
 class RegistrationForm(FlaskForm):
     username = StringField('Benutzername', validators=[DataRequired(), Length(min=4, max=25)])
     email = StringField('E-Mail', validators=[Optional(), Length(max=150)])
-    password = PasswordField('Passwort', validators=[DataRequired(), Length(min=6)])
+    password = PasswordField('Passwort', validators=[DataRequired(), Length(min=PASSWORD_MIN_LENGTH, max=200)])
     confirm = PasswordField('Passwort wiederholen', validators=[DataRequired(), EqualTo('password', message='Passwörter müssen übereinstimmen')])
     if app.config.get('RECAPTCHA_ENABLED', True):
         recaptcha = RecaptchaField()
@@ -1208,6 +1388,17 @@ class ChangeEmailForm(FlaskForm):
             raise ValidationError('Bitte eine gültige E-Mail-Adresse eingeben.')
 
 
+class TwoFactorCodeForm(FlaskForm):
+    code = StringField('Code', validators=[DataRequired(), Length(max=20)])
+    submit = SubmitField('Bestätigen')
+
+
+class TwoFactorPasswordForm(FlaskForm):
+    current_password = PasswordField('Aktuelles Passwort', validators=[DataRequired()])
+    code = StringField('Code aus der App oder Backup-Code', validators=[Optional(), Length(max=20)])
+    submit = SubmitField('Bestätigen')
+
+
 class DeleteAccountForm(FlaskForm):
     current_password = PasswordField('Aktuelles Passwort', validators=[DataRequired()])
     confirm_username = StringField('Benutzername zur Bestätigung', validators=[DataRequired()])
@@ -1240,7 +1431,7 @@ class ResetPasswordForm(FlaskForm):
 
 
 class AdminChangePasswordForm(FlaskForm):
-    new_password = PasswordField('Neues Passwort', validators=[DataRequired(), Length(min=6)])
+    new_password = PasswordField('Neues Passwort', validators=[DataRequired(), Length(min=PASSWORD_MIN_LENGTH, max=200)])
     confirm = PasswordField('Passwort wiederholen', validators=[DataRequired(), EqualTo('new_password', message='Passwörter müssen übereinstimmen')])
     submit = SubmitField('Passwort ändern')
 
@@ -1327,6 +1518,8 @@ class AppSettingsForm(FlaskForm):
     chart_1rm = BooleanField('1RM (Epley)')
     chart_1rm_avg = BooleanField('1RM Ø (Durchschnitt)')
     require_email_verification = BooleanField('E-Mail-Verifizierung aktivieren')
+    registration_enabled = BooleanField('Registrierung neuer Benutzer erlauben')
+    require_admin_2fa = BooleanField('Zwei-Faktor-Anmeldung für Administratoren verpflichtend')
     smtp_server = StringField('SMTP-Server', validators=[Optional(), Length(max=150)])
     smtp_port = IntegerField('SMTP-Port', validators=[Optional(), NumberRange(min=1, max=65535)], default=587)
     smtp_username = StringField('SMTP-Benutzername', validators=[Optional(), Length(max=150)])
@@ -1798,11 +1991,19 @@ def index():
         return redirect(url_for('dashboard'))
     return render_template('index.html')
 
+def registration_open(settings=None):
+    settings = settings or get_app_settings()
+    return settings.registration_enabled is not False
+
+
 @app.route('/register', methods=['GET','POST'])
 @limiter.limit("5 per minute")
 def register():
     cleanup_unverified_accounts()
     settings = get_app_settings()
+    if not registration_open(settings):
+        flash('Die Registrierung ist auf diesem Server deaktiviert.', 'warning')
+        return redirect(url_for('login'))
     email_required = settings.require_email_verification
     form = RegistrationForm()
     if email_required:
@@ -1850,6 +2051,13 @@ def login():
             if settings.require_email_verification and not user.email_confirmed:
                 flash('Bitte bestätige zuerst deine E-Mail-Adresse.', 'warning')
                 show_resend = True
+            elif user.totp_enabled:
+                # Passwort stimmt, zweiter Faktor fehlt noch: noch NICHT einloggen
+                flask_session['2fa_pending'] = {
+                    'uid': user.id, 'fp': password_fingerprint(user.password),
+                    'ts': time.time(), 'remember': bool(form.remember.data), 'tries': 0,
+                }
+                return redirect(url_for('login_two_factor'))
             else:
                 login_user(user, remember=form.remember.data)
                 user.last_login = _utcnow()
@@ -1862,14 +2070,62 @@ def login():
     return render_template('login.html', form=form, footer_pages=pages, show_resend=show_resend)
 
 
-@app.route('/logout')
+@app.route('/login/2fa', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
+def login_two_factor():
+    pending = flask_session.get('2fa_pending')
+    user = db.session.get(User, pending['uid']) if isinstance(pending, dict) and isinstance(pending.get('uid'), int) else None
+    if (user is None or not user.totp_enabled
+            or time.time() - float(pending.get('ts', 0)) > TWO_FACTOR_PENDING_SECONDS
+            or pending.get('tries', 0) >= TWO_FACTOR_MAX_TRIES
+            or not hmac.compare_digest(str(pending.get('fp', '')), password_fingerprint(user.password))):
+        flask_session.pop('2fa_pending', None)
+        flash('Bitte melde dich erneut an.', 'warning')
+        return redirect(url_for('login'))
+    form = TwoFactorCodeForm()
+    if form.validate_on_submit():
+        if verify_second_factor(user, form.code.data):
+            flask_session.pop('2fa_pending', None)
+            login_user(user, remember=bool(pending.get('remember')))
+            user.last_login = _utcnow()
+            db.session.commit()
+            flash('Erfolgreich eingeloggt!', 'success')
+            return redirect(url_for('dashboard'))
+        pending['tries'] = pending.get('tries', 0) + 1
+        flask_session['2fa_pending'] = pending
+        form.code.errors.append('Der Code ist falsch oder abgelaufen.')
+    return render_template('login_2fa.html', form=form)
+
+
+@app.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
+    if request.method != 'POST':
+        # Kein Logout per Link/Bild von fremden Seiten (CSRF)
+        flash('Zum Abmelden bitte den Logout-Knopf benutzen.', 'info')
+        return redirect(url_for('dashboard'))
     logout_user()
     flash('Ausgeloggt.', 'info')
     resp = make_response(redirect(url_for('login')))
     resp.set_cookie('sw_clear_cache', '1', max_age=10)
     return resp
+
+
+@app.before_request
+def enforce_admin_two_factor():
+    """If configured, admins without 2FA may only reach the setup pages."""
+    if not current_user.is_authenticated or not current_user.is_admin or current_user.totp_enabled:
+        return None
+    allowed = {'account_two_factor', 'account_two_factor_setup', 'account_two_factor_enable',
+               'logout', 'api.api_logout', 'static', 'service_worker'}
+    if request.endpoint in allowed or request.endpoint is None:
+        return None
+    if not get_app_settings().require_admin_2fa:
+        return None
+    if request.blueprint == 'api':
+        return jsonify({'error': 'two-factor authentication must be set up first'}), 403
+    flash('Für Administratoren ist die Zwei-Faktor-Anmeldung Pflicht. Bitte jetzt einrichten.', 'warning')
+    return redirect(url_for('account_two_factor'))
 
 
 @app.route('/confirm/<token>')
@@ -1977,6 +2233,121 @@ def account_change_email():
             flash('E-Mail-Adresse gespeichert.' if new_email else 'E-Mail-Adresse entfernt.', 'success')
             return redirect(url_for('account'))
     return _render_account(email_form=form), 400
+
+
+def _render_two_factor(**context):
+    # formdata=None: eingegebene Codes/Passwörter nie in die Seite zurückschreiben
+    context.setdefault('password_form', TwoFactorPasswordForm(prefix='tfp', formdata=None))
+    context.setdefault('code_form', TwoFactorCodeForm(prefix='tfc', formdata=None))
+    context.setdefault('setup', None)
+    context.setdefault('backup_codes', None)
+    try:
+        remaining = len(json.loads(current_user.totp_backup_codes or '[]'))
+    except ValueError:
+        remaining = 0
+    response = make_response(render_template('two_factor.html', backup_codes_left=remaining, **context))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def _two_factor_setup_context(secret):
+    settings = get_app_settings()
+    issuer = settings.app_name or 'Gewichts-Tracker'
+    from urllib.parse import quote
+    uri = (f'otpauth://totp/{quote(issuer)}:{quote(current_user.username)}'
+           f'?secret={secret}&issuer={quote(issuer)}&algorithm=SHA1&digits=6&period=30')
+    return {'secret': ' '.join(secret[i:i + 4] for i in range(0, len(secret), 4)), 'uri': uri, 'qr': totp_qr_svg(uri)}
+
+
+@app.route('/account/2fa')
+@login_required
+def account_two_factor():
+    secret = flask_session.get('2fa_setup')
+    setup = _two_factor_setup_context(secret) if secret and not current_user.totp_enabled else None
+    return _render_two_factor(setup=setup)
+
+
+@app.route('/account/2fa/setup', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_two_factor_setup():
+    form = TwoFactorPasswordForm(prefix='tfp')
+    user = db.session.get(User, current_user.id)
+    if user.totp_enabled:
+        return redirect(url_for('account_two_factor'))
+    if form.validate_on_submit() and check_password_hash(user.password, form.current_password.data):
+        flask_session['2fa_setup'] = generate_totp_secret()
+        return redirect(url_for('account_two_factor'))
+    form.current_password.errors.append('Aktuelles Passwort ist falsch.')
+    return _render_two_factor(password_form=form), 400
+
+
+@app.route('/account/2fa/enable', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_two_factor_enable():
+    secret = flask_session.get('2fa_setup')
+    user = db.session.get(User, current_user.id)
+    if not secret or user.totp_enabled:
+        return redirect(url_for('account_two_factor'))
+    form = TwoFactorCodeForm(prefix='tfc')
+    counter = match_totp(secret, form.code.data) if form.validate_on_submit() else None
+    if counter is None:
+        form.code.errors.append('Der Code stimmt nicht. Prüfe die Uhrzeit deines Geräts und versuche es erneut.')
+        return _render_two_factor(code_form=form, setup=_two_factor_setup_context(secret)), 400
+    user.totp_secret = encrypt_value(secret)
+    user.totp_enabled = True
+    user.totp_last_counter = counter
+    codes = generate_backup_codes(user)
+    db.session.commit()
+    flask_session.pop('2fa_setup', None)
+    flash('Zwei-Faktor-Anmeldung ist aktiv.', 'success')
+    return _render_two_factor(backup_codes=codes)
+
+
+def _confirm_password_and_code(form, user):
+    if not form.validate_on_submit():
+        return False
+    if not check_password_hash(user.password, form.current_password.data):
+        form.current_password.errors.append('Aktuelles Passwort ist falsch.')
+        return False
+    if not verify_second_factor(user, form.code.data or ''):
+        db.session.rollback()
+        form.code.errors.append('Der Code ist falsch oder abgelaufen.')
+        return False
+    return True
+
+
+@app.route('/account/2fa/disable', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_two_factor_disable():
+    user = db.session.get(User, current_user.id)
+    if not user.totp_enabled:
+        return redirect(url_for('account_two_factor'))
+    form = TwoFactorPasswordForm(prefix='tfp')
+    if not _confirm_password_and_code(form, user):
+        return _render_two_factor(password_form=form), 400
+    disable_two_factor(user)
+    db.session.commit()
+    flash('Zwei-Faktor-Anmeldung wurde abgeschaltet.', 'info')
+    return redirect(url_for('account_two_factor'))
+
+
+@app.route('/account/2fa/backup-codes', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")
+def account_two_factor_backup_codes():
+    user = db.session.get(User, current_user.id)
+    if not user.totp_enabled:
+        return redirect(url_for('account_two_factor'))
+    form = TwoFactorPasswordForm(prefix='tfp')
+    if not _confirm_password_and_code(form, user):
+        return _render_two_factor(password_form=form), 400
+    codes = generate_backup_codes(user)
+    db.session.commit()
+    flash('Neue Backup-Codes erzeugt. Die alten sind ungültig.', 'success')
+    return _render_two_factor(backup_codes=codes)
 
 
 def _is_last_admin(user):
@@ -2927,13 +3298,16 @@ def unshare_training_plan(training_plan_id):
     return redirect(url_for('training_plan_detail', training_plan_id=training_plan_id))
 
 
-@app.route('/shared/<token>')
+@app.route('/shared/<token>', methods=['GET', 'POST'])
 @login_required
 def copy_shared_plan(token):
     source_plan = TrainingPlan.query.filter_by(share_token=token).first_or_404()
     if source_plan.user_id == current_user.id:
         flash('Das ist dein eigener Plan.', 'info')
         return redirect(url_for('training_plan_detail', training_plan_id=source_plan.id))
+    if request.method != 'POST':
+        # Nur anzeigen; kopiert wird erst nach Bestätigung (kein ungewolltes Anlegen per Link)
+        return render_template('shared_plan.html', plan=source_plan, token=token, form=DeleteTrainingPlanForm())
     # Plan kopieren
     new_plan = TrainingPlan(
         title=source_plan.title + ' (kopiert)',
@@ -3361,42 +3735,61 @@ def sync():
     if not isinstance(sessions_data, list):
         return jsonify({'status': 'error', 'message': 'sessions must be a list'}), 400
     synced_uuids = []
+    rejected_uuids = []
     for session_info in sessions_data:
         if not isinstance(session_info, dict):
             return jsonify({'status': 'error', 'message': 'each session must be an object'}), 400
         client_uuid = session_info.get('uuid')
+        if client_uuid is not None and (not isinstance(client_uuid, str) or not 0 < len(client_uuid) <= 36):
+            return jsonify({'status': 'error', 'message': 'uuid must be a string of at most 36 characters'}), 400
         # Deduplication
         if client_uuid and ExerciseSession.query.filter_by(client_uuid=client_uuid).first():
             synced_uuids.append(client_uuid)
             continue
         exercise_id = session_info.get('exercise_id')
+        if isinstance(exercise_id, bool) or not isinstance(exercise_id, int):
+            return jsonify({'status': 'error', 'message': 'exercise_id must be an integer'}), 400
         exercise = db.session.get(Exercise, exercise_id)
         if not exercise:
             return jsonify({'status': 'error', 'message': f'Übung {exercise_id} existiert nicht'}), 400
         if not any(p.user_id == current_user.id for p in exercise.training_plans):
             return jsonify({'status': 'error', 'message': 'Unautorisierte Übungs-ID'}), 403
         try:
-            timestamp = datetime.datetime.fromisoformat(session_info.get('timestamp'))
-        except Exception:
+            timestamp = _imp_timestamp(session_info.get('timestamp'), 'timestamp')
+        except ValueError:
             timestamp = _utcnow()
-        perceived_exertion = session_info.get('perceived_exertion')
-        if perceived_exertion == '' or perceived_exertion is None:
+        try:
+            perceived_exertion = _imp_num(session_info.get('perceived_exertion'), 'RPE', integer=True, minimum=1, maximum=10)
+        except ValueError:
             perceived_exertion = None
-        else:
-            try:
-                perceived_exertion = int(perceived_exertion)
-            except (TypeError, ValueError):
-                perceived_exertion = None
+        try:
+            weight = _imp_num(session_info.get('weight'), 'weight', integer=False, minimum=0, maximum=5000)
+            repetitions = _imp_num(session_info.get('repetitions'), 'repetitions', integer=True, minimum=1, maximum=100000)
+            duration = _imp_num(session_info.get('duration_minutes'), 'duration_minutes', integer=True, minimum=1, maximum=100000)
+            distance = _imp_num(session_info.get('distance_km'), 'distance_km', integer=False, minimum=0, maximum=100000)
+            warmup_duration = _imp_num(session_info.get('warmup_duration'), 'warmup_duration', integer=True, minimum=1, maximum=100000)
+            warmup_activity = _imp_str(session_info.get('warmup_activity'), 100, 'warmup_activity')
+            notes = _imp_str(session_info.get('notes'), 5000, 'notes')
+            if not ((weight is not None and repetitions is not None) or duration is not None):
+                raise ValueError('weight/repetitions or duration_minutes required')
+        except ValueError as exc:
+            # Unbrauchbarer Eintrag: nicht speichern, aber als erledigt melden,
+            # damit er die Offline-Warteschlange des Geräts nicht dauerhaft blockiert.
+            app.logger.warning('Rejected offline session from user %s: %s', current_user.id, exc)
+            if client_uuid:
+                synced_uuids.append(client_uuid)
+                rejected_uuids.append(client_uuid)
+            continue
         new_session = ExerciseSession(
             exercise_id=exercise_id,
-            repetitions=session_info.get('repetitions'),
-            weight=session_info.get('weight'),
-            duration_minutes=session_info.get('duration_minutes'),
-            distance_km=session_info.get('distance_km'),
-            warmup_activity=session_info.get('warmup_activity'),
-            warmup_duration=session_info.get('warmup_duration'),
+            repetitions=repetitions,
+            weight=weight,
+            duration_minutes=duration,
+            distance_km=distance,
+            warmup_activity=warmup_activity,
+            warmup_duration=warmup_duration,
             timestamp=timestamp,
-            notes=session_info.get('notes'),
+            notes=notes,
             perceived_exertion=perceived_exertion,
             user_id=current_user.id,
             client_uuid=client_uuid,
@@ -3405,7 +3798,7 @@ def sync():
         if client_uuid:
             synced_uuids.append(client_uuid)
     db.session.commit()
-    return jsonify({'status': 'success', 'synced_uuids': synced_uuids}), 200
+    return jsonify({'status': 'success', 'synced_uuids': synced_uuids, 'rejected_uuids': rejected_uuids}), 200
 
 
 @app.route('/sync_weights', methods=['POST'])
@@ -3487,6 +3880,8 @@ def admin_settings():
         settings.chart_1rm = form.chart_1rm.data
         settings.chart_1rm_avg = form.chart_1rm_avg.data
         settings.require_email_verification = form.require_email_verification.data
+        settings.registration_enabled = form.registration_enabled.data
+        settings.require_admin_2fa = form.require_admin_2fa.data
         settings.smtp_server = form.smtp_server.data
         settings.smtp_port = form.smtp_port.data or 587
         settings.smtp_username = form.smtp_username.data
@@ -3609,6 +4004,20 @@ def admin_delete_user(user_id):
         flash(f'Benutzer {username} gelöscht!', 'info')
         return redirect(url_for('admin_overview'))
     abort(400)
+
+@app.route('/admin/user/<int:user_id>/reset_2fa', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_two_factor(user_id):
+    user = User.query.get_or_404(user_id)
+    form = SetTrainerForm()
+    if form.validate_on_submit():
+        disable_two_factor(user)
+        db.session.commit()
+        flash(f'Zwei-Faktor-Anmeldung für {user.username} zurückgesetzt.', 'info')
+        return redirect(url_for('admin_overview'))
+    abort(400)
+
 
 # Rolle: Trainer setzen/entfernen
 @app.route('/admin/user/<int:user_id>/set_trainer', methods=['POST'])
@@ -3968,6 +4377,8 @@ def api_register():
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'username exists'}), 400
     settings = get_app_settings()
+    if not registration_open(settings):
+        return jsonify({'error': 'registration is disabled'}), 403
     email = (data.get('email') or '').strip() or None
     email_required = settings.require_email_verification
     if email_required and not email:
@@ -4011,6 +4422,13 @@ def api_login():
         settings = get_app_settings()
         if settings.require_email_verification and not user.email_confirmed:
             return jsonify({'error': 'email confirmation required'}), 403
+        if user.totp_enabled:
+            totp = data.get('totp_code')
+            if totp in (None, ''):
+                return jsonify({'error': 'totp_required'}), 401
+            if not isinstance(totp, str) or not verify_second_factor(user, totp):
+                db.session.rollback()
+                return jsonify({'error': 'invalid totp_code'}), 401
         login_user(user)
         user.last_login = _utcnow()
         db.session.commit()

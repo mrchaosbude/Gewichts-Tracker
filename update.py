@@ -519,6 +519,22 @@ def configure_cookies(ui: Assistant):
     ui.ok(f'SESSION_COOKIE_SECURE={"true" if https else "false"} in .env gespeichert')
 
 
+def configure_proxy(ui: Assistant):
+    if os.environ.get('GEWICHTS_TRACKER_TRUSTED_PROXIES') is not None:
+        ui.info(f"GEWICHTS_TRACKER_TRUSTED_PROXIES={os.environ['GEWICHTS_TRACKER_TRUSTED_PROXIES']}")
+        return
+    if not ui.interactive:
+        ui.info('Reverse Proxy: nicht konfiguriert (GEWICHTS_TRACKER_TRUSTED_PROXIES). '
+                'Läuft die App hinter nginx/Caddy, den Wert auf 1 setzen.')
+        return
+    behind_proxy = ui.confirm('Läuft die App hinter einem Reverse Proxy (nginx, Caddy, Traefik ...)? '
+                              'Nur dann mit Ja antworten - sonst könnten Besucher ihre IP-Adresse fälschen.', False)
+    value = '1' if behind_proxy else '0'
+    env_config.update_env_file({'GEWICHTS_TRACKER_TRUSTED_PROXIES': value})
+    os.environ['GEWICHTS_TRACKER_TRUSTED_PROXIES'] = value
+    ui.ok(f'GEWICHTS_TRACKER_TRUSTED_PROXIES={value} in .env gespeichert')
+
+
 def check_smtp_password(ui: Assistant, app_module):
     from cryptography.fernet import InvalidToken
 
@@ -573,8 +589,37 @@ def check_admins(ui: Assistant, app_module):
     User = app_module.User
     users = User.query.order_by(User.id).all()
     if not users:
-        ui.info('Noch keine Benutzer vorhanden. Achtung: Der ERSTE registrierte Benutzer wird Admin - '
-                'direkt nach dem Start selbst registrieren.')
+        ui.info('Noch keine Benutzer vorhanden. Ohne Admin-Konto wird der ERSTE, der sich registriert, Administrator.')
+        created = None
+        if ui.interactive and ui.confirm('Jetzt ein Administrator-Konto anlegen?', True):
+            while created is None:
+                username = input('  ? Benutzername (4-25 Zeichen, leer = abbrechen): ').strip()
+                if not username:
+                    break
+                if not 4 <= len(username) <= 25:
+                    ui.info('Der Benutzername muss 4 bis 25 Zeichen lang sein.')
+                    continue
+                password = ui.secret('Passwort (min. 8 Zeichen, leer = abbrechen)')
+                if not password:
+                    break
+                if len(password) < 8:
+                    ui.info('Zu kurz - mindestens 8 Zeichen.')
+                    continue
+                created = User(username=username, is_admin=True, email_confirmed=True,
+                               password=generate_password_hash(password, method='pbkdf2:sha256'))
+                db.session.add(created)
+                db.session.commit()
+                ui.ok(f'Administrator "{username}" angelegt')
+        if created is None:
+            ui.warn('Kein Administrator angelegt - direkt nach dem Start selbst registrieren, '
+                    'bevor es jemand anderes tut.')
+            return
+        settings = app_module.get_app_settings()
+        if settings.registration_enabled is not False and not ui.confirm(
+                'Dürfen sich weitere Benutzer selbst registrieren?', True):
+            settings.registration_enabled = False
+            db.session.commit()
+            ui.ok('Registrierung deaktiviert (im Admin-Bereich unter Einstellungen wieder einschaltbar)')
         return
     admins = [u for u in users if u.is_admin]
     if not admins:
@@ -594,6 +639,11 @@ def check_admins(ui: Assistant, app_module):
     for admin in admins:
         if not ui.interactive:
             break
+        if admin.totp_enabled and ui.confirm(
+                f'Zwei-Faktor-Anmeldung für Admin "{admin.username}" zurücksetzen? (nur falls ausgesperrt)', False):
+            app_module.disable_two_factor(admin)
+            db.session.commit()
+            ui.ok(f'Zwei-Faktor-Anmeldung für {admin.username} zurückgesetzt')
         if ui.confirm(f'Passwort für Admin "{admin.username}" neu setzen? '
                       '(empfohlen, falls die Datenbank je in Git/Backups öffentlich war)', False):
             while True:
@@ -659,6 +709,7 @@ def main(argv=None):
         ui.step('2/5 Konfiguration (SECRET_KEY, Cookies)')
         configure_secret_key(ui)
         configure_cookies(ui)
+        configure_proxy(ui)
 
         ui.step('3/5 Datenbank-Schema')
         if existing:

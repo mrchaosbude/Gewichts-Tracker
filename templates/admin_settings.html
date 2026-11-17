@@ -97,6 +97,19 @@
           </div>
         </div>
 
+        <p class="section-label">Zugang</p>
+
+        <div class="setting-group">
+          <div class="setting-item">
+            {{ form.registration_enabled(id="registration_enabled") }}
+            <label for="registration_enabled">Registrierung neuer Benutzer erlauben</label>
+          </div>
+          <div class="setting-item">
+            {{ form.require_admin_2fa(id="require_admin_2fa") }}
+            <label for="require_admin_2fa">Zwei-Faktor-Anmeldung für Administratoren verpflichtend</label>
+          </div>
+        </div>
+
         <div id="smtp-settings" style="display:none;">
           <p class="section-label">SMTP-Einstellungen</p>
           <div class="form-group mb-2">

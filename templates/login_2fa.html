@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Code eingeben{% endblock %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Zweiter Schritt</h2>
+    <div class="s-card">
+      <p class="small text-muted">Gib den 6-stelligen Code aus deiner Authenticator-App ein. Ohne Handy funktioniert auch einer deiner Backup-Codes.</p>
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          {{ form.code(class="form-control", autocomplete="one-time-code", inputmode="text", autofocus=true, placeholder="123456") }}
+          {% for error in form.code.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Anmelden</button>
+      </form>
+    </div>
+    <a href="{{ url_for('login') }}" class="back-link">&larr; Zurück zum Login</a>
+  </div>
+{% endblock %}
