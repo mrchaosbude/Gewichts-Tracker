@@ -30,12 +30,13 @@ Nach jedem Update auf dem Server: `python update.py` ausführen.
 - [x] `ProxyFix` konfigurierbar, damit das Rate-Limit hinter einem Reverse Proxy pro Nutzer zählt
 - [x] Fehlende Datenbankspalten werden beim Start selbst ergänzt
 
-## Phase 4 – Umbau für Wartbarkeit
+## Phase 4 – Umbau für Wartbarkeit (erledigt bis auf Statistik)
 
-- [ ] `app.py` in Module/Blueprints aufteilen (Modelle, Formulare, Auth, Training, Admin, API)
-- [ ] Gemeinsame Logikschicht für Web und API, damit beide nicht auseinanderlaufen
-- [ ] Alte `migrate_*.py`-Skripte entfernen, Schema-Änderungen über Alembic
-- [ ] Eingecheckte `.pyc`-Dateien und die leere `fitness.db` aus dem Repo nehmen, `uwsgi.ini` korrigieren
+- [x] `app.py` in das Paket `gewichts_tracker/` aufgeteilt (Module statt Blueprints, damit alle Routen-Namen gleich bleiben)
+- [x] Gemeinsame Logikschicht `services.py` für Pläne kopieren, Reihenfolge, Supersets, Kalender, Körpergewicht, Fotos
+- [ ] Statistik, Dashboard und Achievements auch in eine gemeinsame Berechnung (Web und API rechnen noch getrennt)
+- [x] Alte `migrate_*.py`-Skripte entfernt (Alembic bewusst nicht eingeführt: `update.py` und der Spaltenabgleich beim Start decken eine SQLite-Installation ab)
+- [x] Eingecheckte `.pyc`-Dateien und die leere `fitness.db` aus dem Repo genommen (`uwsgi.ini` war in Ordnung)
 
 ## Phase 5 – Betrieb
 

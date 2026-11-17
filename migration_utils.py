@@ -25,11 +25,14 @@ def resolve_db_path() -> str:
 
 # --- Schema version tracking ---
 
+# Namen der früheren Einzel-Migrationen. Ausgeführt wird nur noch 001 (Datenumbau);
+# 002-004 erledigt update.py per Schema-Abgleich, 005 per migrate.py. Die Namen bleiben,
+# damit bestehende schema_version-Einträge weiter passen.
 MIGRATIONS = [
     ('001_global_exercises', 'migrate_to_global_exercises'),
-    ('002_session_notes_rpe', 'migrate_add_session_notes_rpe'),
-    ('003_cardio', 'migrate_cardio'),
-    ('004_client_uuid', 'migrate_client_uuid'),
+    ('002_session_notes_rpe', None),
+    ('003_cardio', None),
+    ('004_client_uuid', None),
     ('005_ownership_backfill', 'migrate'),
 ]
 
