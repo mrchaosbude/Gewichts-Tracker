@@ -30,6 +30,7 @@ def smtp(app, monkeypatch):
     settings = app_module.get_app_settings()
     settings.smtp_server = 'smtp.example.com'
     settings.smtp_sender_email = 'noreply@example.com'
+    settings.base_url = 'https://fit.example.test'
     db.session.commit()
     sent = []
     monkeypatch.setattr(mail, 'send_app_email', lambda to, subject, body: sent.append((to, subject, body)) or True)

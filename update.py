@@ -535,6 +535,34 @@ def configure_proxy(ui: Assistant):
     ui.ok(f'GEWICHTS_TRACKER_TRUSTED_PROXIES={value} in .env gespeichert')
 
 
+def configure_base_url(ui: Assistant):
+    """Ask for the public address used in e-mail links (reset, confirmation)."""
+    from env_config import BASE_URL_ENV, normalize_base_url
+    current = os.environ.get(BASE_URL_ENV)
+    if current:
+        if normalize_base_url(current):
+            ui.info(f'{BASE_URL_ENV}={current}')
+            return
+        ui.warn(f'{BASE_URL_ENV}={current!r} ist ungültig (erwartet z. B. https://fit.example.de).')
+    if not ui.interactive:
+        ui.info(f'Adresse der App für E-Mail-Links: nicht in .env gesetzt ({BASE_URL_ENV}); '
+                'kann auch im Admin-Bereich unter Einstellungen eingetragen werden.')
+        return
+    ui.info('Links in E-Mails (Passwort vergessen, E-Mail bestätigen) werden aus einer fest eingestellten Adresse gebaut.')
+    while True:
+        answer = input('  ? Unter welcher Adresse ist die App erreichbar (z. B. https://fit.example.de, leer = später im Admin-Bereich)? ').strip()
+        if not answer:
+            ui.info('Übersprungen. Ohne Adresse verschickt die App keine E-Mails mit Links.')
+            return
+        value = normalize_base_url(answer)
+        if value:
+            env_config.update_env_file({BASE_URL_ENV: value})
+            os.environ[BASE_URL_ENV] = value
+            ui.ok(f'{BASE_URL_ENV}={value} in .env gespeichert')
+            return
+        ui.info('Bitte nur Schema und Host angeben, z. B. https://fit.example.de')
+
+
 def check_smtp_password(ui: Assistant, app_module):
     from cryptography.fernet import InvalidToken
 
@@ -710,6 +738,7 @@ def main(argv=None):
         configure_secret_key(ui)
         configure_cookies(ui)
         configure_proxy(ui)
+        configure_base_url(ui)
 
         ui.step('3/5 Datenbank-Schema')
         if existing:

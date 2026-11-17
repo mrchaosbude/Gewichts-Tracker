@@ -68,6 +68,17 @@ app.config['SESSION_COOKIE_SECURE'] = _cookie_secure
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 app.config['REMEMBER_COOKIE_SECURE'] = _cookie_secure
+# "Angemeldet bleiben" gilt 30 Tage statt der Flask-Login-Vorgabe von 365.
+try:
+    _remember_days = max(1, int(os.environ.get('GEWICHTS_TRACKER_REMEMBER_DAYS', '30')))
+except ValueError:
+    _remember_days = 30
+app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=_remember_days)
+# Optional: nur diese Hostnamen annehmen (Komma-getrennt, z.B. "fit.example.de,localhost").
+# Anfragen mit anderem Host-Header werden mit 400 abgewiesen.
+_allowed_hosts = [h.strip() for h in os.environ.get('GEWICHTS_TRACKER_ALLOWED_HOSTS', '').split(',') if h.strip()]
+if _allowed_hosts:
+    app.config['TRUSTED_HOSTS'] = _allowed_hosts
 
 
 # reCAPTCHA-Konfiguration (ersetze die Schlüssel durch deine echten Werte)

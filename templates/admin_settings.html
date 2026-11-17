@@ -52,6 +52,23 @@
           {{ form.app_name.label(class="small font-weight-bold") }}
           {{ form.app_name(class="form-control", placeholder="z.B. Gewichts-Tracker, Mein Gym...") }}
         </div>
+        <div class="form-group mb-3">
+          {{ form.base_url.label(class="small font-weight-bold") }}
+          {% if base_url_from_env %}
+            <input type="text" class="form-control" value="{{ base_url_from_env }}" readonly>
+            <small class="text-muted">Festgelegt über die Umgebungsvariable GEWICHTS_TRACKER_BASE_URL.</small>
+          {% else %}
+            {{ form.base_url(class="form-control", placeholder="https://fit.example.de") }}
+            {% for error in form.base_url.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+            <small class="text-muted">
+              Wird für Links in E-Mails verwendet (Passwort vergessen, E-Mail bestätigen).
+              {% if suggested_base_url %}<strong>Vorschlag aus deiner aktuellen Adresse – bitte prüfen und speichern.</strong>{% endif %}
+            </small>
+          {% endif %}
+          {% if mail_links_missing %}
+            <div class="text-danger small mt-1">Ohne diese Adresse werden keine E-Mails mit Links verschickt.</div>
+          {% endif %}
+        </div>
 
         <p class="section-label">Sichtbare Graphen (Übungsdetails)</p>
 

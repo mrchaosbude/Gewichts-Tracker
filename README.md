@@ -197,6 +197,19 @@ Alles auf der Seite **Konto**:
 - **Reverse Proxy:** `GEWICHTS_TRACKER_TRUSTED_PROXIES=1` setzen, wenn nginx/Caddy davor sitzt. Dann zählt das Rate-Limit pro Besucher statt für alle gemeinsam. Ohne Proxy nicht setzen.
 - API: `POST /api/login` verlangt bei aktiver Zwei-Faktor-Anmeldung zusätzlich `totp_code`; ohne ihn kommt `401 {"error": "totp_required"}`.
 
+### Betrieb und Härtung
+
+| Variable | Wirkung |
+|----------|---------|
+| `GEWICHTS_TRACKER_BASE_URL` | Adresse der App, z. B. `https://fit.example.de`. Links in E-Mails (Passwort vergessen, Bestätigung) werden **nur** daraus gebaut, nie aus dem Host-Header der Anfrage. Alternativ im Admin-Bereich unter Einstellungen; ohne Adresse werden keine Mails mit Links verschickt. |
+| `GEWICHTS_TRACKER_ALLOWED_HOSTS` | Optional, Komma-getrennt (z. B. `fit.example.de,localhost`). Anfragen mit anderem Host-Header werden mit 400 abgewiesen. |
+| `GEWICHTS_TRACKER_REMEMBER_DAYS` | Gültigkeit von „Angemeldet bleiben“ in Tagen (Standard 30). |
+| `SESSION_COOKIE_SECURE=true` | Bei HTTPS-Betrieb setzen; schaltet zusätzlich HSTS ein. |
+
+- **Anmeldesperre:** Pro IP-Adresse 10 Login-Versuche pro Minute, pro Konto 10 Fehlversuche und 5 falsche Zwei-Faktor-Codes je 15 Minuten. Danach ist die Anmeldung für dieses Konto bis zu 15 Minuten gesperrt, auch mit richtigem Passwort. Die Zähler liegen im Arbeitsspeicher und gelten pro Prozess (`uwsgi.ini`: `processes = 1`).
+- **E-Mail-Adresse ändern:** Ist die E-Mail-Verifizierung eingeschaltet, gilt eine neue Adresse erst nach Klick auf den Bestätigungslink; bis dahin bleibt die alte aktiv.
+- **Netzwerk:** `uwsgi.ini` lauscht mit `http-socket = :1024` unverschlüsselt auf allen Schnittstellen. Im Internet die App hinter einen Reverse Proxy mit TLS (nginx, Caddy) stellen und uwsgi auf `127.0.0.1:1024` binden oder den Port per Firewall sperren.
+
 Die weitere Planung steht in [ROADMAP.md](ROADMAP.md).
 
 ## Update einer bestehenden Installation

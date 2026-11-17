@@ -2,7 +2,7 @@
 
 import hmac
 
-from flask import abort, flash, jsonify, redirect, request, url_for
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from urllib.parse import urlparse
 
@@ -57,13 +57,31 @@ def set_cache_headers(response):
     response.headers.setdefault('Referrer-Policy', 'same-origin')
     if CONTENT_SECURITY_POLICY:
         response.headers.setdefault('Content-Security-Policy', CONTENT_SECURITY_POLICY)
+    if app.config.get('SESSION_COOKIE_SECURE'):
+        # Nur bei HTTPS-Betrieb: Browser sollen die Seite ein Jahr lang nur noch per HTTPS öffnen
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
     return response
 
 
 @app.before_request
 def limit_request_size():
-    if request.endpoint != 'account_import' and (request.content_length or 0) > MAX_REQUEST_BYTES:
+    if request.endpoint == 'account_import':
+        return None
+    if (request.content_length or 0) > MAX_REQUEST_BYTES:
         abort(413)
+    # Gilt auch für Uploads ohne Größenangabe (Transfer-Encoding: chunked)
+    try:
+        request.max_content_length = MAX_REQUEST_BYTES
+    except AttributeError:  # pragma: no cover - Flask < 3.1 kennt das pro Anfrage nicht
+        pass
+    return None
+
+
+@app.errorhandler(429)
+def too_many_requests(error):
+    if request.blueprint == 'api' or request.path.startswith(('/api/', '/sync')):
+        return jsonify({'error': 'too many requests, please wait and try again'}), 429
+    return render_template('too_many_requests.html'), 429
 
 
 @app.context_processor

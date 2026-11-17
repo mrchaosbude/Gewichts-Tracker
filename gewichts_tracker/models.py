@@ -18,6 +18,7 @@ class User(UserMixin, db.Model):
     email_confirmed = db.Column(db.Boolean, default=False)
     email_token = db.Column(db.String(100), nullable=True)
     email_token_created = db.Column(db.DateTime, nullable=True)
+    pending_email = db.Column(db.String(150), nullable=True)  # neue Adresse, bis der Link bestätigt ist
     registration_date = db.Column(db.DateTime, default=lambda: _utcnow())
     last_login = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
@@ -145,6 +146,7 @@ class AppSettings(db.Model):
     require_email_verification = db.Column(db.Boolean, default=False)
     registration_enabled = db.Column(db.Boolean, default=True)
     require_admin_2fa = db.Column(db.Boolean, default=False)
+    base_url = db.Column(db.String(300), nullable=True)  # Adresse der App für Links in E-Mails
     smtp_server = db.Column(db.String(150), nullable=True)
     smtp_port = db.Column(db.Integer, default=587)
     smtp_username = db.Column(db.String(150), nullable=True)

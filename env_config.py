@@ -8,8 +8,32 @@ Real environment variables always win over the file.
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Hier statt in gewichts_tracker.mail, damit update.py die Prüfung nutzen kann,
+# ohne die App (und damit eine Datenbank) zu laden.
+BASE_URL_ENV = 'GEWICHTS_TRACKER_BASE_URL'
+
+
+def normalize_base_url(value):
+    """Return 'scheme://host[:port]' for a valid http(s) address, else None."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip().rstrip('/')
+    if not value or any(ord(ch) <= 0x20 for ch in value):
+        return None
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc or '@' in parsed.netloc:
+        return None
+    if parsed.query or parsed.fragment or parsed.params or parsed.path not in ('', '/'):
+        return None
+    return f'{parsed.scheme}://{parsed.netloc}'
+
+
 DEFAULT_ENV_PATH = os.path.join(APP_DIR, '.env')
 
 

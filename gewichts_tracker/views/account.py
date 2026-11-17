@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import secrets
 import tempfile
 import zipfile
 
@@ -34,6 +35,7 @@ from gewichts_tracker.security import (
 )
 from gewichts_tracker.serializers import serialize_exercise, serialize_session, serialize_training_plan
 from gewichts_tracker.accounts import _is_last_admin, delete_user_with_data
+from gewichts_tracker.mail import mail_links_available, send_verification_email
 from gewichts_tracker.forms import (
     ChangeEmailForm,
     ChangePasswordForm,
@@ -62,7 +64,7 @@ def _render_account(password_form=None, email_form=None, delete_form=None):
         password_form=password_form or ChangePasswordForm(prefix='pw'),
         email_form=email_form,
         delete_form=delete_form or DeleteAccountForm(prefix='del'),
-        reset_available=bool(settings.smtp_server and settings.smtp_sender_email),
+        reset_available=mail_links_available(),
         max_import_mb=MAX_IMPORT_BYTES // (1024 * 1024),
     )
 
@@ -106,8 +108,21 @@ def account_change_email():
             form.email.errors.append('Diese E-Mail-Adresse wird bereits verwendet.')
         elif new_email is None and get_app_settings().require_email_verification:
             form.email.errors.append('Eine E-Mail-Adresse ist erforderlich.')
+        elif new_email and get_app_settings().require_email_verification and new_email != user.email:
+            # Neue Adresse gilt erst nach Klick auf den Link; bis dahin bleibt die alte aktiv
+            user.pending_email = new_email
+            user.email_token = secrets.token_urlsafe(32)
+            user.email_token_created = _utcnow()
+            db.session.commit()
+            if send_verification_email(user, to=new_email):
+                flash('Wir haben einen Bestätigungslink an die neue Adresse geschickt. '
+                      'Bis du ihn öffnest, bleibt deine bisherige Adresse aktiv.', 'info')
+            else:
+                flash('Der Bestätigungslink konnte nicht gesendet werden. Bitte wende dich an den Administrator.', 'warning')
+            return redirect(url_for('account'))
         else:
             user.email = new_email
+            user.pending_email = None
             db.session.commit()
             flash('E-Mail-Adresse gespeichert.' if new_email else 'E-Mail-Adresse entfernt.', 'success')
             return redirect(url_for('account'))

@@ -43,7 +43,13 @@ from gewichts_tracker.stats import (
     serialize_summary,
 )
 from gewichts_tracker.mail import send_verification_email
-from gewichts_tracker.accounts import _is_last_admin, delete_user_with_data, registration_open
+from gewichts_tracker.accounts import (
+    _is_last_admin,
+    authenticate,
+    delete_user_with_data,
+    login_account_limit,
+    registration_open,
+)
 from gewichts_tracker.data_io import _imp_num, _imp_str, _imp_timestamp
 
 
@@ -104,16 +110,15 @@ def api_register():
 
 @api_bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
+@login_account_limit
 def api_login():
     data, error_response, status_code = _get_json_payload()
     if error_response is not None:
         return error_response, status_code
     username = data.get('username')
     password = data.get('password')
-    if not isinstance(username, str) or not isinstance(password, str):
-        return jsonify({'error': 'invalid credentials'}), 401
-    user = User.query.filter_by(username=username).first()
-    if user and check_password_hash(user.password, password):
+    user = authenticate(username, password)
+    if user:
         settings = get_app_settings()
         if settings.require_email_verification and not user.email_confirmed:
             return jsonify({'error': 'email confirmation required'}), 403

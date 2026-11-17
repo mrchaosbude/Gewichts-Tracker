@@ -55,6 +55,9 @@
           {{ email_form.email.label(class="small font-weight-bold") }}
           {{ email_form.email(class="form-control", type="email", autocomplete="email", placeholder="name@example.com") }}
           {{ field_errors(email_form.email) }}
+          {% if current_user.pending_email %}
+            <small class="text-muted">Noch nicht bestätigt: {{ current_user.pending_email }} – bitte den Link in der E-Mail öffnen.</small>
+          {% endif %}
         </div>
         <div class="form-group">
           {{ email_form.current_password.label(class="small font-weight-bold") }}

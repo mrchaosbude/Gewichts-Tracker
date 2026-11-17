@@ -1,12 +1,14 @@
 """Admin-Bereich: Benutzer, Einstellungen, Footer."""
 
 import html
+import os
+
 import markdown
 import nh3
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from flask import abort, flash, redirect, render_template, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user
 from werkzeug.security import generate_password_hash
 
@@ -15,7 +17,7 @@ from gewichts_tracker.crypto import encrypt_value
 from gewichts_tracker.models import FooterLink, FooterPage, get_app_settings, User
 from gewichts_tracker.security import disable_two_factor
 from gewichts_tracker.permissions import admin_required
-from gewichts_tracker.mail import _smtp_connect
+from gewichts_tracker.mail import _smtp_connect, BASE_URL_ENV, normalize_base_url, public_base_url
 from gewichts_tracker.accounts import delete_user_with_data
 from gewichts_tracker.forms import (
     AdminChangePasswordForm,
@@ -57,8 +59,13 @@ def admin_overview():
 def admin_settings():
     settings = get_app_settings()
     form = AppSettingsForm(obj=settings)
-    if form.validate_on_submit():
+    base_url_from_env = normalize_base_url(os.environ.get(BASE_URL_ENV))
+    if form.is_submitted() and form.base_url.data and normalize_base_url(form.base_url.data) is None:
+        form.base_url.errors = list(form.base_url.errors) + [
+            'Bitte nur Schema und Host angeben, z. B. https://fit.example.de']
+    elif form.validate_on_submit():
         settings.app_name = form.app_name.data
+        settings.base_url = normalize_base_url(form.base_url.data)
         settings.chart_weight = form.chart_weight.data
         settings.chart_reps = form.chart_reps.data
         settings.chart_volume = form.chart_volume.data
@@ -78,7 +85,14 @@ def admin_settings():
         db.session.commit()
         flash('Einstellungen gespeichert!', 'success')
         return redirect(url_for('admin_settings'))
-    return render_template('admin_settings.html', form=form, settings=settings)
+    suggested_base_url = None
+    if not settings.base_url and not base_url_from_env and request.method == 'GET':
+        # Vorschlag aus der Adresse, mit der der Admin gerade arbeitet; gilt erst nach Speichern
+        suggested_base_url = normalize_base_url(request.host_url)
+        form.base_url.data = suggested_base_url
+    return render_template('admin_settings.html', form=form, settings=settings,
+                           base_url_from_env=base_url_from_env, suggested_base_url=suggested_base_url,
+                           mail_links_missing=bool(settings.smtp_server) and public_base_url() is None)
 
 
 @app.route('/admin/test-email', methods=['POST'])

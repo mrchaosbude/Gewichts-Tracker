@@ -15,7 +15,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import generate_password_hash
 from wtforms.validators import DataRequired, Length
 
 from gewichts_tracker.core import _utcnow, app, db, limiter
@@ -27,8 +27,14 @@ from gewichts_tracker.security import (
     verify_password_reset_token,
     verify_second_factor,
 )
-from gewichts_tracker.mail import send_password_reset_email, send_verification_email
-from gewichts_tracker.accounts import cleanup_unverified_accounts, registration_open
+from gewichts_tracker.mail import mail_links_available, send_password_reset_email, send_verification_email
+from gewichts_tracker.accounts import (
+    authenticate,
+    cleanup_unverified_accounts,
+    login_account_limit,
+    registration_open,
+    two_factor_account_limit,
+)
 from gewichts_tracker.forms import (
     ForgotPasswordForm,
     LoginForm,
@@ -101,13 +107,14 @@ def register():
 
 @app.route('/login', methods=['GET','POST'])
 @limiter.limit("10 per minute")
+@login_account_limit
 def login():
     cleanup_unverified_accounts()
     form = LoginForm()
     show_resend = False
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and check_password_hash(user.password, form.password.data):
+        user = authenticate(form.username.data, form.password.data)
+        if user:
             settings = get_app_settings()
             if settings.require_email_verification and not user.email_confirmed:
                 flash('Bitte bestätige zuerst deine E-Mail-Adresse.', 'warning')
@@ -133,6 +140,7 @@ def login():
 
 @app.route('/login/2fa', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
+@two_factor_account_limit
 def login_two_factor():
     pending = flask_session.get('2fa_pending')
     user = db.session.get(User, pending['uid']) if isinstance(pending, dict) and isinstance(pending.get('uid'), int) else None
@@ -184,6 +192,24 @@ def confirm_email(token):
         if age > 86400:  # 24 Stunden
             flash('Der Bestätigungslink ist abgelaufen. Bitte fordere einen neuen an.', 'danger')
             return redirect(url_for('login'))
+    if user.pending_email:
+        # Bestätigung einer geänderten Adresse
+        taken = User.query.filter(db.func.lower(User.email) == user.pending_email.lower(), User.id != user.id).first()
+        if taken:
+            user.pending_email = None
+            user.email_token = None
+            user.email_token_created = None
+            db.session.commit()
+            flash('Diese E-Mail-Adresse wird inzwischen von einem anderen Konto verwendet.', 'danger')
+            return redirect(url_for('account' if current_user.is_authenticated else 'login'))
+        user.email = user.pending_email
+        user.pending_email = None
+        user.email_confirmed = True
+        user.email_token = None
+        user.email_token_created = None
+        db.session.commit()
+        flash('Neue E-Mail-Adresse bestätigt.', 'success')
+        return redirect(url_for('account' if current_user.is_authenticated else 'login'))
     user.email_confirmed = True
     user.email_token = None
     user.email_token_created = None
@@ -197,20 +223,16 @@ def confirm_email(token):
 def resend_confirmation():
     username = request.form.get('username', '').strip()
     user = User.query.filter_by(username=username).first()
-    if not user or user.email_confirmed or not user.email:
-        flash('Bestätigungslink konnte nicht erneut gesendet werden.', 'danger')
-        return redirect(url_for('login'))
     now = _utcnow()
-    if user.email_token_created and (now - user.email_token_created).total_seconds() < 300:
-        flash('Bitte warte einige Minuten, bevor du erneut eine E-Mail anforderst.', 'info')
-        return redirect(url_for('login'))
-    user.email_token = secrets.token_urlsafe(32)
-    user.email_token_created = now
-    db.session.commit()
-    if send_verification_email(user):
-        flash('Bestätigungs-E-Mail erneut gesendet!', 'success')
-    else:
-        flash('E-Mail konnte nicht gesendet werden. Bitte kontaktiere den Administrator.', 'warning')
+    if (user is not None and not user.email_confirmed and user.email
+            and not (user.email_token_created and (now - user.email_token_created).total_seconds() < 300)):
+        user.email_token = secrets.token_urlsafe(32)
+        user.email_token_created = now
+        db.session.commit()
+        send_verification_email(user)
+    # Immer dieselbe Antwort, damit sich keine Konten erraten lassen
+    flash('Falls ein noch unbestätigtes Konto existiert, wurde eine neue Bestätigungs-E-Mail gesendet. '
+          'Kommt nichts an, warte 5 Minuten oder wende dich an den Administrator.', 'info')
     return redirect(url_for('login'))
 
 
@@ -223,8 +245,7 @@ RESET_MAIL_COOLDOWN = 300  # Sekunden
 def forgot_password():
     if current_user.is_authenticated:
         return redirect(url_for('account'))
-    settings = get_app_settings()
-    reset_available = bool(settings.smtp_server and settings.smtp_sender_email)
+    reset_available = mail_links_available()
     form = ForgotPasswordForm()
     if form.validate_on_submit() and reset_available:
         identifier = form.identifier.data.strip()

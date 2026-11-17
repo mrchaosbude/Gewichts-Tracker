@@ -240,6 +240,7 @@ class DeleteFooterLinkForm(FlaskForm):
 
 class AppSettingsForm(FlaskForm):
     app_name = StringField('App-Titel', validators=[DataRequired(), Length(max=150)])
+    base_url = StringField('Adresse der App (für Links in E-Mails)', validators=[Optional(), Length(max=300)])
     chart_weight = BooleanField('Gewichtsverlauf')
     chart_reps = BooleanField('Wiederholungen')
     chart_volume = BooleanField('Volumen')
