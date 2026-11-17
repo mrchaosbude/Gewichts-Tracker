@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Eintrag bearbeiten – {{ exercise.name }}{% endblock %}
+
+{% macro row(field, hint=None) %}
+  <div class="form-group">
+    {{ field.label(class="small font-weight-bold") }}
+    {{ field(class="form-control", **kwargs) }}
+    {% if hint %}<small class="text-muted">{{ hint }}</small>{% endif %}
+    {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+  <div class="page-wrap">
+    <h2 class="page-title">Eintrag bearbeiten</h2>
+    <p class="text-muted subtitle">{{ exercise.name }}</p>
+    <div class="s-card">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        {{ row(form.timestamp, type="datetime-local") }}
+        {% if is_cardio %}
+          {{ row(form.duration_minutes, inputmode="numeric") }}
+          {{ row(form.distance_km, inputmode="decimal") }}
+          {{ row(form.warmup_activity) }}
+        {% else %}
+          {{ row(form.weight, inputmode="decimal") }}
+          {{ row(form.repetitions, inputmode="numeric") }}
+          {{ row(form.warmup_activity) }}
+          {{ row(form.warmup_duration, inputmode="numeric") }}
+        {% endif %}
+        {{ row(form.perceived_exertion, inputmode="numeric") }}
+        {{ row(form.notes) }}
+        {{ form.submit(class="btn btn-primary btn-block") }}
+      </form>
+    </div>
+    <a href="{{ url_for('exercise_detail', exercise_id=exercise.id) }}" class="back-link">&larr; Zurück zur Übung</a>
+  </div>
+{% endblock %}
