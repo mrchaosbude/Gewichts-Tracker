@@ -33,6 +33,88 @@ Dies ist ein **komplettes** Flask‑Projekt zum Verwalten von Trainingsplänen, 
    - **Trainer**: ähnliche Rechte wie Admin für Templates (Erstellen, Editieren, Löschen, Sichtbarkeit …)
    - **Standardbenutzer**: kann eigene Pläne verwalten und Vorlagen übernehmen, sieht jedoch nur sichtbare Vorlagen
 
+## Neuinstallation
+
+**Voraussetzungen:** Python 3.10 oder neuer, git. Für den Betrieb im Internet zusätzlich ein Reverse Proxy mit HTTPS (nginx, Caddy) und eine Domain.
+
+> Wichtig: `python update.py` muss **vor dem ersten Start** laufen. Sonst wird der erste Besucher, der sich registriert, Administrator.
+
+### 1. Code holen und Pakete installieren
+
+```bash
+git clone https://github.com/mrchaosbude/Gewichts-Tracker.git
+cd Gewichts-Tracker
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+pip install uwsgi                 # nur für den Server-Betrieb (nicht unter Windows)
+```
+
+### 2. Einrichten
+
+```bash
+python update.py
+```
+
+Bei einer leeren Installation legt der Assistent die Datenbank unter `instance/fitness.db` an und fragt nacheinander:
+
+1. **SECRET_KEY** erzeugen – mit Ja beantworten, er wird in `.env` gespeichert.
+2. **Nur HTTPS?** – Ja, wenn ein Proxy mit TLS davor sitzt.
+3. **Reverse Proxy?** – Ja nur, wenn nginx, Caddy o. Ä. davor sitzt.
+4. **Adresse der App**, z. B. `https://fit.example.de` – ohne sie verschickt die App keine Mails zum Zurücksetzen des Passworts oder zur Bestätigung.
+5. **Administrator-Konto anlegen** – unbedingt mit Ja beantworten.
+6. **Selbst-Registrierung erlauben?** – Nein, wenn nur eingeladene Personen die App nutzen sollen (später im Admin-Bereich änderbar).
+
+### 3. Starten
+
+Zum Ausprobieren auf dem eigenen Rechner (danach unter http://127.0.0.1:5000):
+
+```bash
+python app.py
+```
+
+Auf dem Server:
+
+```bash
+uwsgi --ini uwsgi.ini
+```
+
+Die App lauscht dann auf Port 1024. Im Internet:
+
+- in `uwsgi.ini` `http-socket = 127.0.0.1:1024` setzen, damit sie nur über den Proxy erreichbar ist,
+- im Proxy die Domain auf `127.0.0.1:1024` weiterleiten und große Uploads erlauben (nginx: `client_max_body_size 100m;`), sonst scheitert der Daten-Import.
+
+Als Dienst unter systemd, z. B. `/etc/systemd/system/gewichts-tracker.service` (Pfad und Benutzer anpassen):
+
+```ini
+[Unit]
+Description=Gewichts-Tracker
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/Gewichts-Tracker
+ExecStart=/opt/Gewichts-Tracker/venv/bin/uwsgi --ini uwsgi.ini
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now gewichts-tracker
+```
+
+### 4. Nach dem ersten Login
+
+- **Admin → Einstellungen:** SMTP-Server eintragen und mit der Test-Mail prüfen, die Adresse der App kontrollieren, bei Bedarf die Zwei-Faktor-Anmeldung für Admins zur Pflicht machen.
+- **Konto → Zwei-Faktor-Anmeldung:** für das Admin-Konto einrichten und die Backup-Codes sicher aufbewahren.
+
+### Was gesichert werden muss
+
+- **`instance/`** – Datenbank, Fortschrittsfotos und die Sicherungen von `update.py`.
+- **`.env`** – der `SECRET_KEY`. Geht er verloren, sind alle Logins ungültig, die Zwei-Faktor-Anmeldung muss neu eingerichtet werden und das gespeicherte SMTP-Passwort ist unlesbar.
+
 ## Konfiguration
 
 Die App wird über Umgebungsvariablen konfiguriert:
@@ -214,7 +296,15 @@ Die weitere Planung steht in [ROADMAP.md](ROADMAP.md).
 
 ## Update einer bestehenden Installation
 
-Nach jedem Update des Codes einmal den Update-Assistenten ausführen (App vorher stoppen):
+App stoppen, dann:
+
+```bash
+git pull
+pip install -r requirements.txt
+python update.py
+```
+
+Danach die App wieder starten. Der Update-Assistent hat drei Modi:
 
 ```bash
 python update.py            # interaktiv, fragt Fehlendes ab
